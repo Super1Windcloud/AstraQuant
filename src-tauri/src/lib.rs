@@ -1,12 +1,132 @@
 use log::{Level, LevelFilter, debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, env, path::PathBuf, sync::Once, time::Duration};
+use std::{
+    collections::HashMap,
+    env,
+    path::PathBuf,
+    sync::{Mutex, Once},
+    time::Duration,
+};
 use tauri::{self, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
 const MARKET_LOG_TARGET: &str = "astraquant::market_data";
 static ENV_LOADER: Once = Once::new();
+
+#[derive(Debug, Clone)]
+struct PendingLogRecord {
+    level: Level,
+    target: String,
+    message: String,
+    module_path: Option<String>,
+    file: Option<String>,
+    line: Option<u32>,
+    count: usize,
+}
+
+#[derive(Default)]
+struct DedupState {
+    pending: Option<PendingLogRecord>,
+}
+
+struct DedupLogger {
+    inner: Box<dyn log::Log>,
+    state: Mutex<DedupState>,
+}
+
+impl DedupLogger {
+    fn new(inner: Box<dyn log::Log>) -> Self {
+        Self {
+            inner,
+            state: Mutex::new(DedupState::default()),
+        }
+    }
+
+    fn emit_record(&self, pending: PendingLogRecord) {
+        let rendered_message = if pending.count > 1 {
+            format!("{} ({})", pending.message, pending.count)
+        } else {
+            pending.message
+        };
+
+        let mut builder = log::Record::builder();
+        let args = format_args!("{rendered_message}");
+        builder
+            .args(args)
+            .level(pending.level)
+            .target(&pending.target)
+            .module_path(pending.module_path.as_deref())
+            .file(pending.file.as_deref())
+            .line(pending.line);
+
+        self.inner.log(&builder.build());
+    }
+}
+
+impl log::Log for DedupLogger {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+        self.inner.enabled(metadata)
+    }
+
+    fn log(&self, record: &log::Record<'_>) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+
+        let next = PendingLogRecord {
+            level: record.level(),
+            target: record.target().to_string(),
+            message: record.args().to_string(),
+            module_path: record.module_path().map(ToString::to_string),
+            file: record.file().map(ToString::to_string),
+            line: record.line(),
+            count: 1,
+        };
+
+        let mut state = self
+            .state
+            .lock()
+            .expect("dedup logger mutex poisoned while logging");
+
+        match state.pending.as_mut() {
+            Some(pending)
+                if pending.level == next.level
+                    && pending.target == next.target
+                    && pending.message == next.message =>
+            {
+                pending.count += 1;
+            }
+            Some(_) => {
+                let previous = state.pending.replace(next);
+                drop(state);
+
+                if let Some(previous) = previous {
+                    self.emit_record(previous);
+                }
+            }
+            None => {
+                state.pending = Some(next);
+            }
+        }
+    }
+
+    fn flush(&self) {
+        let pending = {
+            let mut state = self
+                .state
+                .lock()
+                .expect("dedup logger mutex poisoned while flushing");
+            state.pending.take()
+        };
+
+        if let Some(pending) = pending {
+            self.emit_record(pending);
+        }
+
+        self.inner.flush();
+    }
+}
 
 #[tauri::command]
 fn show_window(window: tauri::Window) -> Result<(), String> {
@@ -502,6 +622,33 @@ struct MassiveAgg {
     t: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+struct MassiveIndicesSnapshotResponse {
+    results: Option<Vec<MassiveIndexSnapshot>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MassiveIndexSnapshot {
+    ticker: Option<String>,
+    name: Option<String>,
+    value: Option<f64>,
+    last_updated: Option<i64>,
+    session: Option<MassiveIndexSession>,
+    error: Option<String>,
+    message: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MassiveIndexSession {
+    change: Option<f64>,
+    change_percent: Option<f64>,
+    open: Option<f64>,
+    high: Option<f64>,
+    low: Option<f64>,
+    close: Option<f64>,
+    previous_close: Option<f64>,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 struct TwelveQuote {
     symbol: Option<String>,
@@ -594,7 +741,7 @@ fn get_indices_overview(
 
     let (rows, unavailable_count) = match provider {
         "twelvedata" => fetch_indices_with_twelvedata(&client, &definitions)?,
-        "massive" => fetch_indices_with_symbol_loop(&client, &definitions, provider)?,
+        "massive" => fetch_indices_with_massive_snapshot(&client, &definitions)?,
         "finnhub" => fetch_indices_with_symbol_loop(&client, &definitions, provider)?,
         _ => return Err(format!("Unsupported market data provider: {provider}")),
     };
@@ -986,6 +1133,106 @@ fn fetch_indices_with_symbol_loop(
     Ok((rows, unavailable_count))
 }
 
+fn fetch_indices_with_massive_snapshot(
+    client: &reqwest::blocking::Client,
+    definitions: &[&IndexDefinition],
+) -> Result<(Vec<IndexOverviewRow>, usize), String> {
+    let token = env_key(&["MASSIVE_API_KEY", "POLYGON_API_KEY"])?;
+    let symbols: Vec<&str> = definitions
+        .iter()
+        .filter_map(|definition| definition.symbols.massive)
+        .collect();
+
+    if symbols.is_empty() {
+        warn!(
+            target: MARKET_LOG_TARGET,
+            "massive snapshot requested with zero mapped symbols; returning empty set"
+        );
+        return Ok((Vec::new(), 0));
+    }
+
+    let url = format!(
+        "https://api.massive.com/v3/snapshot/indices?ticker.any_of={}&limit={}&sort=ticker&order=asc&apiKey={}",
+        urlencoding::encode(&symbols.join(",")),
+        symbols.len(),
+        urlencoding::encode(&token)
+    );
+
+    let response = request_json::<MassiveIndicesSnapshotResponse>(
+        client,
+        url,
+        "massive",
+        "indices snapshot",
+        &format!("{} symbols", symbols.len()),
+    );
+
+    let response = match response {
+        Ok(response) => response,
+        Err(error) => {
+            warn!(
+                target: MARKET_LOG_TARGET,
+                "massive indices snapshot failed; falling back to per-symbol previous aggregate error={error}"
+            );
+            return fetch_indices_with_symbol_loop(client, definitions, "massive");
+        }
+    };
+
+    let snapshot_map = response
+        .results
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|snapshot| {
+            let ticker = snapshot.ticker.as_deref()?;
+            Some((normalize_symbol(ticker), snapshot))
+        })
+        .collect::<HashMap<_, _>>();
+
+    debug!(
+        target: MARKET_LOG_TARGET,
+        "massive indices snapshot parsed symbols={}",
+        snapshot_map.len()
+    );
+
+    let mut unavailable_count = 0;
+    let rows = definitions
+        .iter()
+        .map(|definition| {
+            let snapshot = definition
+                .symbols
+                .massive
+                .and_then(|symbol| snapshot_map.get(&normalize_symbol(symbol)));
+
+            match snapshot {
+                Some(snapshot) => {
+                    if snapshot.error.is_some() || snapshot.message.is_some() {
+                        unavailable_count += 1;
+                        warn!(
+                            target: MARKET_LOG_TARGET,
+                            "massive indices snapshot returned symbol error symbol={} error={:?} message={:?}",
+                            definition.code,
+                            snapshot.error,
+                            snapshot.message
+                        );
+                    }
+
+                    massive_index_row_from_snapshot(definition, snapshot)
+                }
+                None => {
+                    unavailable_count += 1;
+                    warn!(
+                        target: MARKET_LOG_TARGET,
+                        "massive indices snapshot missing symbol in response symbol={}",
+                        definition.code
+                    );
+                    index_row_from_snapshot(definition, None)
+                }
+            }
+        })
+        .collect();
+
+    Ok((rows, unavailable_count))
+}
+
 fn fetch_indices_with_twelvedata(
     client: &reqwest::blocking::Client,
     definitions: &[&IndexDefinition],
@@ -1141,6 +1388,36 @@ fn index_row_from_snapshot(
             .and_then(|snapshot| snapshot.previous_close),
         as_of: snapshot.and_then(|snapshot| snapshot.as_of),
         technical_rating,
+    }
+}
+
+fn massive_index_row_from_snapshot(
+    definition: &IndexDefinition,
+    snapshot: &MassiveIndexSnapshot,
+) -> IndexOverviewRow {
+    let session = snapshot.session.as_ref();
+    let change_percent = session.and_then(|session| session.change_percent);
+
+    IndexOverviewRow {
+        id: definition.id.to_string(),
+        symbol: definition.code.to_string(),
+        name: snapshot
+            .name
+            .clone()
+            .unwrap_or_else(|| definition.name.to_string()),
+        region: definition.region.to_string(),
+        currency: Some(definition.currency.to_string()),
+        price: snapshot
+            .value
+            .or_else(|| session.and_then(|session| session.close)),
+        change: session.and_then(|session| session.change),
+        change_percent,
+        open: session.and_then(|session| session.open),
+        high: session.and_then(|session| session.high),
+        low: session.and_then(|session| session.low),
+        previous_close: session.and_then(|session| session.previous_close.or(session.close)),
+        as_of: snapshot.last_updated.map(|timestamp| timestamp.to_string()),
+        technical_rating: technical_rating(change_percent),
     }
 }
 
@@ -1322,10 +1599,31 @@ fn ansi_color_for_level(level: Level) -> &'static str {
     }
 }
 
+fn build_log_plugin() -> tauri_plugin_log::Builder {
+    tauri_plugin_log::Builder::new()
+        .level(LevelFilter::Debug)
+        .level_for("reqwest", LevelFilter::Warn)
+        .level_for("hyper", LevelFilter::Warn)
+        .level_for("tao", LevelFilter::Warn)
+        .targets([
+            Target::new(TargetKind::Stdout).format(|out, message, record| {
+                let color = ansi_color_for_level(record.level());
+                out.finish(format_args!("{color}{message}\x1b[0m"))
+            }),
+            Target::new(TargetKind::LogDir {
+                file_name: Some("backend".into()),
+            }),
+            Target::new(TargetKind::Webview),
+        ])
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            let (_, max_level, logger) = build_log_plugin().split(app.handle())?;
+            tauri_plugin_log::attach_logger(max_level, Box::new(DedupLogger::new(logger)))?;
+
             info!(
                 target: MARKET_LOG_TARGET,
                 "tauri setup start package={} version={}",
@@ -1345,24 +1643,7 @@ pub fn run() {
             get_market_snapshot,
             get_indices_overview
         ])
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(LevelFilter::Debug)
-                .level_for("reqwest", LevelFilter::Warn)
-                .level_for("hyper", LevelFilter::Warn)
-                .level_for("tao", LevelFilter::Warn)
-                .targets([
-                    Target::new(TargetKind::Stdout).format(|out, message, record| {
-                        let color = ansi_color_for_level(record.level());
-                        out.finish(format_args!("{color}{message}\x1b[0m"))
-                    }),
-                    Target::new(TargetKind::LogDir {
-                        file_name: Some("backend".into()),
-                    }),
-                    Target::new(TargetKind::Webview),
-                ])
-                .build(),
-        )
+        .plugin(build_log_plugin().skip_logger().build())
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
