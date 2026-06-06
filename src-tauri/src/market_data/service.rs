@@ -480,21 +480,68 @@ fn fetch_indices_with_massive_snapshot(
         symbols.len(),
         urlencoding::encode(&token)
     );
+    let subject = format!("{} symbols", symbols.len());
 
-    let response = request_json::<MassiveIndicesSnapshotResponse>(
-        client,
-        url,
-        "massive",
-        "indices snapshot",
-        &format!("{} symbols", symbols.len()),
+    debug!(
+        target: MARKET_LOG_TARGET,
+        "http request start provider=massive operation=indices snapshot subject={subject}"
     );
 
-    let response = match response {
+    let response = client.get(url).send().map_err(|error| {
+        let message = format!("massive indices snapshot request failed for {subject}: {error}");
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        message
+    })?;
+
+    let status = response.status();
+    let body = response.text().map_err(|error| {
+        let message =
+            format!("massive indices snapshot response body read failed for {subject}: {error}");
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        message
+    })?;
+
+    debug!(
+        target: MARKET_LOG_TARGET,
+        "http response provider=massive operation=indices snapshot subject={subject} status={} body_bytes={}",
+        status,
+        body.len()
+    );
+
+    if status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+    {
+        let body_preview = truncate_for_log(&body, 400);
+        let message = format!(
+            "massive indices snapshot unavailable status={} symbols={} body={body_preview}",
+            status,
+            symbols.len()
+        );
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        return Err(message);
+    }
+
+    if !status.is_success() {
+        let body_preview = truncate_for_log(&body, 400);
+        warn!(
+            target: MARKET_LOG_TARGET,
+            "massive indices snapshot failed status={} symbols={} body={} falling_back=per_symbol",
+            status,
+            symbols.len(),
+            body_preview
+        );
+        return fetch_indices_with_symbol_loop(client, definitions, "massive");
+    }
+
+    let response: MassiveIndicesSnapshotResponse = match serde_json::from_str(&body) {
         Ok(response) => response,
         Err(error) => {
+            let body_preview = truncate_for_log(&body, 400);
             warn!(
                 target: MARKET_LOG_TARGET,
-                "massive indices snapshot failed; falling back to per-symbol previous aggregate error={error}"
+                "massive indices snapshot parse failed symbols={} error={} body={} falling_back=per_symbol",
+                symbols.len(),
+                error,
+                body_preview
             );
             return fetch_indices_with_symbol_loop(client, definitions, "massive");
         }
