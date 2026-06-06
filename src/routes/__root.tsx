@@ -6,6 +6,7 @@ import { TailwindIndicator } from "@/components/tailwind-indicator"
 import { ThemeProvider } from "@/components/theme-provider"
 import { WindowTitlebar } from "@/components/window-titlebar"
 import { DashboardLayout } from "@/dashboard/layout"
+import { I18nProvider, useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 function AppShell() {
@@ -17,34 +18,33 @@ function AppShell() {
 
   return (
     <ThemeProvider>
-      <div className="flex h-screen w-screen flex-col bg-background">
-        <WindowTitlebar />
-        <div
-          style={{
-            scrollbarWidth: "none",
-          }}
-          className={cn(
-            "flex-1 overflow-auto pb-8",
-            "scrollbar scrollbar-track-transparent scrollbar-thumb-accent scrollbar-thumb-rounded-md"
-          )}
-        >
-          <Outlet />
+      <I18nProvider>
+        <div className="flex h-screen w-screen flex-col bg-background">
+          <WindowTitlebar />
+          <div
+            style={{
+              scrollbarWidth: "none",
+            }}
+            className={cn(
+              "flex-1 overflow-auto pb-8",
+              "scrollbar scrollbar-track-transparent scrollbar-thumb-accent scrollbar-thumb-rounded-md"
+            )}
+          >
+            <Outlet />
+          </div>
         </div>
-      </div>
-      <TailwindIndicator />
+        <TailwindIndicator />
+      </I18nProvider>
     </ThemeProvider>
   )
 }
 
 function NotFound() {
+  const { t } = useI18n()
+
   return (
-    <DashboardLayout
-      title="Page not found"
-      description="The page you are looking for does not exist."
-    >
-      <div className="text-muted-foreground">
-        Use the navigation above to jump back into the dashboard.
-      </div>
+    <DashboardLayout title={t("pageNotFound")} description={t("pageNotFoundDescription")}>
+      <div className="text-muted-foreground">{t("pageNotFoundAction")}</div>
     </DashboardLayout>
   )
 }

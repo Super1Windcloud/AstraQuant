@@ -4,7 +4,12 @@ import { Copy, Minus, Square, X } from "lucide-react"
 import type { CSSProperties, KeyboardEvent } from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
+import { LanguageSwitcher } from "@/components/language-switcher"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { useI18n } from "@/lib/i18n"
+
 export function WindowTitlebar() {
+  const { t } = useI18n()
   const currentWindow = useMemo<Window | null>(() => {
     if (typeof window === "undefined") {
       return null
@@ -90,8 +95,8 @@ export function WindowTitlebar() {
       className="flex h-10 items-center justify-between border-b border-border/60 bg-background/80 pl-3 pr-1 text-xs text-muted-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/60"
     >
       <div className="flex select-none items-center gap-2">
-        <span className="text-sm font-semibold text-foreground">tauri-ui</span>
-        <span className="hidden sm:inline">Dashboard</span>
+        <span className="text-sm font-semibold text-foreground">AstraQuant</span>
+        <span className="hidden sm:inline">{t("appSubtitle")}</span>
       </div>
 
       <div
@@ -99,6 +104,8 @@ export function WindowTitlebar() {
         className="flex items-center gap-1"
         style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
       >
+        <LanguageSwitcher />
+        <ThemeToggle />
         <button
           type="button"
           aria-label="Minimize"

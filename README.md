@@ -1,6 +1,6 @@
-# Tauri UI Template
+# AstraQuant
 
-A desktop app starter built with Tauri, React, TypeScript, Vite, and shadcn/ui. It ships with a ready-to-use dashboard, a routed frontend structure, and a modern toolchain for building cross-platform desktop products.
+AstraQuant is a next-generation market intelligence desktop terminal built with Tauri, React, TypeScript, Vite, and shadcn/ui. It focuses on multi-asset quotes, provider switching, and a clean foundation for charting and trading workflows.
 
 ![Dashboard Preview](./images/image.png)
 
@@ -10,7 +10,7 @@ A desktop app starter built with Tauri, React, TypeScript, Vite, and shadcn/ui. 
 - React 19 + TypeScript frontend powered by [Vite](https://vitejs.dev/)
 - UI primitives from [shadcn/ui](https://ui.shadcn.com/) and [Radix UI](https://www.radix-ui.com/)
 - File-based routing with [TanStack Router](https://tanstack.com/router)
-- Built-in dashboard pages and reusable UI components
+- Market terminal layout with quote search, provider switching, and snapshot panels
 - Theme support with light and dark modes
 - Preconfigured developer tooling with Biome, Husky, Vitest, and Cargo
 - Utility scripts for dependency maintenance and icon generation
@@ -20,8 +20,8 @@ A desktop app starter built with Tauri, React, TypeScript, Vite, and shadcn/ui. 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/tauri-ui-template.git
-cd tauri-ui-template
+git clone https://github.com/Super1WindCloud/astraquant.git
+cd astraquant
 ```
 
 ### 2. Install dependencies
@@ -83,7 +83,7 @@ pnpm tb
 ## Project Structure
 
 ```text
-tauri-ui-template/
+astraquant/
 ├── public/              # Static assets
 ├── scripts/             # Utility scripts
 ├── src/                 # React application

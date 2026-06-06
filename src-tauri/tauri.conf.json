@@ -1,7 +1,7 @@
 {
-	"productName": "tauri-ui",
+	"productName": "AstraQuant",
 	"version": "0.1.2",
-	"identifier": "com.superwindcloud.tauri-ui",
+	"identifier": "com.superwindcloud.astraquant",
 	"build": {
 		"beforeDevCommand": "pnpm dev",
 		"beforeBuildCommand": "pnpm build",
@@ -19,7 +19,7 @@
 			{
 				"label": "main",
 				"fullscreen": false,
-				"title": "tauri-ui",
+				"title": "AstraQuant",
 				"center": true,
 				"resizable": true,
 				"decorations": false,

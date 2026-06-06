@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  type AssetClass,
   getMarketSnapshot,
   type MarketProvider,
   type MarketSnapshot,
@@ -27,6 +28,7 @@ import {
   marketGroups,
   providerLabels,
 } from "@/lib/market-data"
+import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/")({
@@ -36,6 +38,7 @@ export const Route = createFileRoute("/")({
 const providers: MarketProvider[] = ["finnhub", "massive", "twelvedata"]
 
 function MarketPage() {
+  const { t } = useI18n()
   const [provider, setProvider] = useState<MarketProvider>("finnhub")
   const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol>(marketGroups[0].symbols[0])
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null)
@@ -107,7 +110,7 @@ function MarketPage() {
           {isSidebarOpen ? (
             <div className="flex min-w-0 items-center gap-2">
               <BarChart3 className="size-4 shrink-0" />
-              <span className="truncate text-sm font-medium">Markets</span>
+              <span className="truncate text-sm font-medium">AstraQuant</span>
             </div>
           ) : null}
           <Button
@@ -116,7 +119,7 @@ function MarketPage() {
             size="icon-sm"
             className="ml-auto"
             onClick={() => setIsSidebarOpen((value) => !value)}
-            aria-label={isSidebarOpen ? "折叠侧边栏" : "展开侧边栏"}
+            aria-label={isSidebarOpen ? t("sidebarToggleClose") : t("sidebarToggleOpen")}
           >
             {isSidebarOpen ? <ChevronsLeft /> : <ChevronsRight />}
           </Button>
@@ -131,7 +134,7 @@ function MarketPage() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   className="pl-8"
-                  placeholder="搜索 symbol"
+                  placeholder={t("searchSymbol")}
                 />
               </div>
             </div>
@@ -139,7 +142,7 @@ function MarketPage() {
               {filteredGroups.map((group) => (
                 <Collapsible key={group.id} defaultOpen>
                   <CollapsibleTrigger className="flex h-8 w-full items-center justify-between px-3 text-sm font-medium hover:bg-sidebar-accent">
-                    <span>{group.title}</span>
+                    <span>{getAssetClassLabel(group.id, t)}</span>
                     <ChevronDown className="size-4 text-muted-foreground" />
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -206,7 +209,7 @@ function MarketPage() {
               size="icon-sm"
               disabled={isLoading}
               onClick={() => setSelectedSymbol({ ...selectedSymbol })}
-              aria-label="刷新行情"
+              aria-label={t("refreshQuotes")}
             >
               <RefreshCw className={cn(isLoading && "animate-spin")} />
             </Button>
@@ -231,7 +234,7 @@ function MarketPage() {
               </div>
               <div className="text-right text-xs text-muted-foreground">
                 <div>{providerLabels[provider]}</div>
-                <div>{snapshot?.as_of ? `as of ${snapshot.as_of}` : "等待数据"}</div>
+                <div>{snapshot?.as_of ? `${t("asOf")} ${snapshot.as_of}` : t("waitingForData")}</div>
               </div>
             </div>
           </div>
@@ -241,9 +244,9 @@ function MarketPage() {
               <div className="flex h-full min-h-[320px] items-center justify-center border bg-card">
                 <div className="text-center">
                   <BarChart3 className="mx-auto mb-3 size-8 text-muted-foreground" />
-                  <div className="text-sm font-medium">行情图表区域</div>
+                  <div className="text-sm font-medium">{t("chartArea")}</div>
                   <div className="mt-1 max-w-sm text-sm text-muted-foreground">
-                    聚合接口已就绪，可在这里接入 TradingView Lightweight Charts 或 K 线数据。
+                    {t("chartPlaceholder")}
                   </div>
                 </div>
               </div>
@@ -258,23 +261,23 @@ function MarketPage() {
                 ) : null}
 
                 <section>
-                  <h2 className="text-sm font-medium">概览</h2>
+                  <h2 className="text-sm font-medium">{t("overview")}</h2>
                   <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden border bg-border">
                     <QuoteStat label="Open" value={formatPrice(snapshot?.open)} />
                     <QuoteStat label="High" value={formatPrice(snapshot?.high)} />
                     <QuoteStat label="Low" value={formatPrice(snapshot?.low)} />
                     <QuoteStat label="Prev close" value={formatPrice(snapshot?.previous_close)} />
                     <QuoteStat label="Volume" value={formatCompact(snapshot?.volume)} />
-                    <QuoteStat label="Asset" value={selectedSymbol.assetClass} />
+                    <QuoteStat label="Asset" value={getAssetClassLabel(selectedSymbol.assetClass, t)} />
                   </dl>
                 </section>
 
                 <section>
-                  <h2 className="text-sm font-medium">接口</h2>
+                  <h2 className="text-sm font-medium">{t("api")}</h2>
                   <div className="mt-3 space-y-2 text-sm">
                     <InfoRow label="Provider" value={providerLabels[provider]} />
                     <InfoRow label="Symbol" value={selectedSymbol.symbol} />
-                    <InfoRow label="Source" value={snapshot?.source_note ?? "未返回"} />
+                    <InfoRow label="Source" value={snapshot?.source_note ?? t("notReturned")} />
                   </div>
                 </section>
               </div>
@@ -284,6 +287,19 @@ function MarketPage() {
       </section>
     </main>
   )
+}
+
+function getAssetClassLabel(assetClass: AssetClass, t: ReturnType<typeof useI18n>["t"]) {
+  const labels: Record<AssetClass, ReturnType<typeof t>> = {
+    stock: t("assetStock"),
+    index: t("assetIndex"),
+    etf: t("assetEtf"),
+    crypto: t("assetCrypto"),
+    forex: t("assetForex"),
+    future: t("assetFuture"),
+  }
+
+  return labels[assetClass]
 }
 
 function QuoteStat({ label, value }: { label: string; value: string }) {

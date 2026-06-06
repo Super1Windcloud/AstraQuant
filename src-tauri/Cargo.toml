@@ -1,30 +1,27 @@
 [package]
-name = "tauri-ui"
+name = "astraquant"
 version = "0.1.2"
-description = "A Tauri App"
+description = "AstraQuant market intelligence desktop terminal."
 authors = ["SuperWindCloud"]
 license = "MIT"
 repository = ""
-edition = "2021"
+edition = "2024"
 
 
 [lib]
-name = "tauri_ui_lib"
+name = "astraquant_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 
 
 [build-dependencies]
-tauri-build = { version = "2", features = ["config-json5"] }
+tauri-build = { version = "2.6.2", features = ["config-json5"] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api", "config-json5"] }
-tauri-plugin-opener = "2"
+tauri = { version = "2.11.2", features = ["macos-private-api", "config-json5"] }
+tauri-plugin-opener = "2.5.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dotenvy = "0.15"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 urlencoding = "2"
-
-
-
