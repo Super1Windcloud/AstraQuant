@@ -1,17 +1,27 @@
+use log::{Level, LevelFilter, debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, env, path::PathBuf, time::Duration};
+use std::{collections::HashMap, env, path::PathBuf, sync::Once, time::Duration};
 use tauri::{self, Manager};
+use tauri_plugin_log::{Target, TargetKind};
+
+const MARKET_LOG_TARGET: &str = "astraquant::market_data";
+static ENV_LOADER: Once = Once::new();
 
 #[tauri::command]
 fn show_window(window: tauri::Window) -> Result<(), String> {
     if window.is_visible().unwrap() {
+        debug!(target: MARKET_LOG_TARGET, "show_window skipped label={} already_visible=true", window.label());
         return Ok(());
     }
 
-    window
-        .show()
-        .map_err(|error| format!("Failed to show window: {error}"))?;
+    window.show().map_err(|error| {
+        let message = format!("Failed to show window: {error}");
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        message
+    })?;
+
+    debug!(target: MARKET_LOG_TARGET, "show_window success label={}", window.label());
 
     Ok(())
 }
@@ -515,15 +525,46 @@ fn get_market_snapshot(
     asset_class: String,
 ) -> Result<MarketSnapshot, String> {
     load_env();
+    info!(
+        target: MARKET_LOG_TARGET,
+        "get_market_snapshot start provider={} symbol={} asset_class={}",
+        provider,
+        symbol,
+        asset_class
+    );
 
     let client = build_http_client()?;
 
-    match provider.as_str() {
+    let result = match provider.as_str() {
         "finnhub" => fetch_finnhub(&client, &symbol, &asset_class),
         "massive" => fetch_massive(&client, &symbol, &asset_class),
         "twelvedata" => fetch_twelve_data(&client, &symbol, &asset_class),
-        _ => Err(format!("Unsupported market data provider: {provider}")),
+        _ => {
+            let message = format!("Unsupported market data provider: {provider}");
+            warn!(target: MARKET_LOG_TARGET, "{message}");
+            Err(message)
+        }
+    };
+
+    match &result {
+        Ok(snapshot) => info!(
+            target: MARKET_LOG_TARGET,
+            "get_market_snapshot success provider={} symbol={} price={:?} as_of={:?}",
+            snapshot.provider,
+            snapshot.symbol,
+            snapshot.price,
+            snapshot.as_of
+        ),
+        Err(error) => error!(
+            target: MARKET_LOG_TARGET,
+            "get_market_snapshot failed provider={} symbol={} error={}",
+            provider,
+            symbol,
+            error
+        ),
     }
+
+    result
 }
 
 #[tauri::command]
@@ -532,11 +573,24 @@ fn get_indices_overview(
     preferred_provider: Option<String>,
 ) -> Result<IndicesOverviewResponse, String> {
     load_env();
+    info!(
+        target: MARKET_LOG_TARGET,
+        "get_indices_overview start category={} preferred_provider={:?}",
+        category,
+        preferred_provider
+    );
 
     let selected_category = normalize_category(&category);
     let provider = resolve_indices_provider(preferred_provider.as_deref())?;
     let client = build_http_client()?;
     let definitions = definitions_for_category(&selected_category);
+    info!(
+        target: MARKET_LOG_TARGET,
+        "get_indices_overview provider_resolved provider={} category={} definitions={}",
+        provider,
+        selected_category,
+        definitions.len()
+    );
 
     let (rows, unavailable_count) = match provider {
         "twelvedata" => fetch_indices_with_twelvedata(&client, &definitions)?,
@@ -556,55 +610,184 @@ fn get_indices_overview(
         )
     };
 
-    Ok(IndicesOverviewResponse {
+    let response = IndicesOverviewResponse {
         provider: provider.to_string(),
         category: selected_category,
         updated_at,
         source_note,
         categories: category_counts(),
         rows,
-    })
+    };
+
+    info!(
+        target: MARKET_LOG_TARGET,
+        "get_indices_overview success provider={} category={} rows={} updated_at={:?}",
+        response.provider,
+        response.category,
+        response.rows.len(),
+        response.updated_at
+    );
+
+    Ok(response)
 }
 
 fn build_http_client() -> Result<reqwest::blocking::Client, String> {
+    debug!(
+        target: MARKET_LOG_TARGET,
+        "creating reqwest blocking client timeout_seconds=12"
+    );
     reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(12))
         .build()
-        .map_err(|error| format!("Failed to create HTTP client: {error}"))
+        .map_err(|error| {
+            error!(
+                target: MARKET_LOG_TARGET,
+                "failed to create reqwest blocking client error={error}"
+            );
+            format!("Failed to create HTTP client: {error}")
+        })
 }
 
 fn load_env() {
-    let _ = dotenvy::dotenv();
-
-    if let Ok(current_dir) = env::current_dir() {
-        let candidates: [PathBuf; 2] = [current_dir.join(".env"), current_dir.join("..").join(".env")];
-
-        for path in candidates {
-            if path.exists() {
-                let _ = dotenvy::from_path(path);
-            }
+    ENV_LOADER.call_once(|| {
+        match dotenvy::dotenv() {
+            Ok(path) => info!(
+                target: MARKET_LOG_TARGET,
+                "loaded dotenv from default search path={}",
+                path.display()
+            ),
+            Err(error) => debug!(
+                target: MARKET_LOG_TARGET,
+                "dotenv default load skipped error={error}"
+            ),
         }
-    }
+
+        if let Ok(current_dir) = env::current_dir() {
+            let candidates: [PathBuf; 2] = [
+                current_dir.join(".env"),
+                current_dir.join("..").join(".env"),
+            ];
+
+            for path in candidates {
+                if path.exists() {
+                    match dotenvy::from_path(&path) {
+                        Ok(_) => info!(
+                            target: MARKET_LOG_TARGET,
+                            "loaded dotenv from candidate path={}",
+                            path.display()
+                        ),
+                        Err(error) => warn!(
+                            target: MARKET_LOG_TARGET,
+                            "failed to load dotenv candidate path={} error={error}",
+                            path.display()
+                        ),
+                    }
+                }
+            }
+        } else {
+            warn!(
+                target: MARKET_LOG_TARGET,
+                "unable to resolve current_dir while loading dotenv candidates"
+            );
+        }
+    });
 }
 
 fn env_key(names: &[&str]) -> Result<String, String> {
     for name in names {
         if let Ok(value) = env::var(name) {
             if !value.trim().is_empty() {
+                debug!(
+                    target: MARKET_LOG_TARGET,
+                    "resolved api key env var name={name}"
+                );
                 return Ok(value);
             }
         }
     }
 
-    Err(format!(
-        "Missing API key. Expected one of: {}",
-        names.join(", ")
-    ))
+    let message = format!("Missing API key. Expected one of: {}", names.join(", "));
+    warn!(target: MARKET_LOG_TARGET, "{message}");
+    Err(message)
 }
 
 fn has_env_key(names: &[&str]) -> bool {
-    names.iter()
-        .any(|name| env::var(name).map(|value| !value.trim().is_empty()).unwrap_or(false))
+    names.iter().any(|name| {
+        env::var(name)
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
+    })
+}
+
+fn read_json_response<T: serde::de::DeserializeOwned>(
+    response: reqwest::blocking::Response,
+    provider: &str,
+    operation: &str,
+    subject: &str,
+) -> Result<T, String> {
+    let status = response.status();
+    let body = response.text().map_err(|error| {
+        let message =
+            format!("{provider} {operation} response body read failed for {subject}: {error}");
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        message
+    })?;
+
+    debug!(
+        target: MARKET_LOG_TARGET,
+        "http response provider={provider} operation={operation} subject={subject} status={} body_bytes={}",
+        status,
+        body.len()
+    );
+
+    if !status.is_success() {
+        let body_preview = truncate_for_log(&body, 400);
+        let message = format!(
+            "{provider} {operation} returned HTTP {status} for {subject}. body={body_preview}"
+        );
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        return Err(message);
+    }
+
+    serde_json::from_str(&body).map_err(|error| {
+        let body_preview = truncate_for_log(&body, 400);
+        let message = format!(
+            "{provider} {operation} response parse failed for {subject}: {error}. body={body_preview}"
+        );
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        message
+    })
+}
+
+fn request_json<T: serde::de::DeserializeOwned>(
+    client: &reqwest::blocking::Client,
+    url: String,
+    provider: &str,
+    operation: &str,
+    subject: &str,
+) -> Result<T, String> {
+    debug!(
+        target: MARKET_LOG_TARGET,
+        "http request start provider={provider} operation={operation} subject={subject}"
+    );
+
+    let response = client.get(url).send().map_err(|error| {
+        let message = format!("{provider} {operation} request failed for {subject}: {error}");
+        error!(target: MARKET_LOG_TARGET, "{message}");
+        message
+    })?;
+
+    read_json_response(response, provider, operation, subject)
+}
+
+fn truncate_for_log(value: &str, max_chars: usize) -> String {
+    let mut truncated = value.chars().take(max_chars).collect::<String>();
+
+    if value.chars().count() > max_chars {
+        truncated.push_str("...");
+    }
+
+    truncated.replace('\n', "\\n")
 }
 
 fn provider_label(provider: &str) -> &'static str {
@@ -617,37 +800,84 @@ fn provider_label(provider: &str) -> &'static str {
 }
 
 fn resolve_indices_provider(preferred: Option<&str>) -> Result<&'static str, String> {
-    if let Some(provider) = preferred.map(str::trim).filter(|provider| !provider.is_empty()) {
+    if let Some(provider) = preferred
+        .map(str::trim)
+        .filter(|provider| !provider.is_empty())
+    {
+        info!(
+            target: MARKET_LOG_TARGET,
+            "resolving preferred indices provider requested={provider}"
+        );
         return match provider {
             "twelvedata" if has_env_key(&["TWELVE_DATA_API_KEY", "TWELVEDATA_API_KEY"]) => {
+                info!(
+                    target: MARKET_LOG_TARGET,
+                    "resolved indices provider requested={} selected=twelvedata",
+                    provider
+                );
                 Ok("twelvedata")
             }
-            "massive" if has_env_key(&["MASSIVE_API_KEY", "POLYGON_API_KEY"]) => Ok("massive"),
-            "finnhub" if has_env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"]) => Ok("finnhub"),
-            "twelvedata" | "massive" | "finnhub" => Err(format!(
-                "{} API key is not configured for aggregated indices",
-                provider_label(provider)
-            )),
-            _ => Err(format!("Unsupported market data provider: {provider}")),
+            "massive" if has_env_key(&["MASSIVE_API_KEY", "POLYGON_API_KEY"]) => {
+                info!(
+                    target: MARKET_LOG_TARGET,
+                    "resolved indices provider requested={} selected=massive",
+                    provider
+                );
+                Ok("massive")
+            }
+            "finnhub" if has_env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"]) => {
+                info!(
+                    target: MARKET_LOG_TARGET,
+                    "resolved indices provider requested={} selected=finnhub",
+                    provider
+                );
+                Ok("finnhub")
+            }
+            "twelvedata" | "massive" | "finnhub" => {
+                let message = format!(
+                    "{} API key is not configured for aggregated indices",
+                    provider_label(provider)
+                );
+                warn!(target: MARKET_LOG_TARGET, "{message}");
+                Err(message)
+            }
+            _ => {
+                let message = format!("Unsupported market data provider: {provider}");
+                warn!(target: MARKET_LOG_TARGET, "{message}");
+                Err(message)
+            }
         };
     }
 
     if has_env_key(&["TWELVE_DATA_API_KEY", "TWELVEDATA_API_KEY"]) {
+        info!(
+            target: MARKET_LOG_TARGET,
+            "resolved indices provider automatically selected=twelvedata"
+        );
         return Ok("twelvedata");
     }
 
     if has_env_key(&["MASSIVE_API_KEY", "POLYGON_API_KEY"]) {
+        info!(
+            target: MARKET_LOG_TARGET,
+            "resolved indices provider automatically selected=massive"
+        );
         return Ok("massive");
     }
 
     if has_env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"]) {
+        info!(
+            target: MARKET_LOG_TARGET,
+            "resolved indices provider automatically selected=finnhub"
+        );
         return Ok("finnhub");
     }
 
-    Err(
+    let message =
         "Missing API key. Configure TWELVE_DATA_API_KEY, MASSIVE_API_KEY/POLYGON_API_KEY, or FINNHUB_API_KEY."
-            .to_string(),
-    )
+            .to_string();
+    error!(target: MARKET_LOG_TARGET, "{message}");
+    Err(message)
 }
 
 fn normalize_category(category: &str) -> String {
@@ -656,6 +886,11 @@ fn normalize_category(category: &str) -> String {
     if INDEX_CATEGORY_IDS.contains(&normalized.as_str()) {
         normalized
     } else {
+        warn!(
+            target: MARKET_LOG_TARGET,
+            "unknown indices category requested={} defaulting_to=all",
+            category
+        );
         "all".to_string()
     }
 }
@@ -695,26 +930,55 @@ fn fetch_indices_with_symbol_loop(
     definitions: &[&IndexDefinition],
     provider: &str,
 ) -> Result<(Vec<IndexOverviewRow>, usize), String> {
+    info!(
+        target: MARKET_LOG_TARGET,
+        "aggregated symbol loop start provider={} symbols={}",
+        provider,
+        definitions.len()
+    );
     let mut rows = Vec::with_capacity(definitions.len());
     let mut unavailable_count = 0;
 
     for definition in definitions {
         let Some(provider_symbol) = index_symbol_for_provider(definition, provider) else {
+            warn!(
+                target: MARKET_LOG_TARGET,
+                "missing provider symbol mapping provider={} index_id={} code={}",
+                provider,
+                definition.id,
+                definition.code
+            );
             unavailable_count += 1;
             rows.push(index_row_from_snapshot(definition, None));
             continue;
         };
 
         let snapshot = match provider {
-            "finnhub" => fetch_finnhub(client, provider_symbol, "index").ok(),
-            "massive" => fetch_massive(client, provider_symbol, "index").ok(),
-            "twelvedata" => fetch_twelve_data(client, provider_symbol, "index").ok(),
-            _ => None,
+            "finnhub" => fetch_finnhub(client, provider_symbol, "index"),
+            "massive" => fetch_massive(client, provider_symbol, "index"),
+            "twelvedata" => fetch_twelve_data(client, provider_symbol, "index"),
+            _ => {
+                let message = format!("Unsupported market data provider: {provider}");
+                warn!(target: MARKET_LOG_TARGET, "{message}");
+                Err(message)
+            }
         };
 
-        if snapshot.is_none() {
-            unavailable_count += 1;
-        }
+        let snapshot = match snapshot {
+            Ok(snapshot) => Some(snapshot),
+            Err(error) => {
+                unavailable_count += 1;
+                warn!(
+                    target: MARKET_LOG_TARGET,
+                    "aggregated quote unavailable provider={} provider_symbol={} index_code={} error={}",
+                    provider,
+                    provider_symbol,
+                    definition.code,
+                    error
+                );
+                None
+            }
+        };
 
         rows.push(index_row_from_snapshot(definition, snapshot));
     }
@@ -742,38 +1006,48 @@ fn fetch_indices_with_twelvedata(
         urlencoding::encode(&token)
     );
 
-    let bulk_response = client
-        .get(url)
-        .send()
-        .and_then(|response| response.error_for_status())
-        .map_err(|error| format!("Twelve Data bulk request failed: {error}"))?;
+    let value: Value = request_json(
+        client,
+        url,
+        "twelvedata",
+        "bulk quote",
+        &format!("{} symbols", symbols.len()),
+    )?;
 
-    let value: Value = bulk_response
-        .json()
-        .map_err(|error| format!("Twelve Data bulk response parse failed: {error}"))?;
+    match parse_twelvedata_bulk_quotes(value) {
+        Ok(snapshots) => {
+            let mut unavailable_count = 0;
+            let rows = definitions
+                .iter()
+                .map(|definition| {
+                    let snapshot = definition
+                        .symbols
+                        .twelvedata
+                        .and_then(|symbol| snapshots.get(&normalize_symbol(symbol)).cloned());
 
-    if let Ok(snapshots) = parse_twelvedata_bulk_quotes(value) {
-        let mut unavailable_count = 0;
-        let rows = definitions
-            .iter()
-            .map(|definition| {
-                let snapshot = definition
-                    .symbols
-                    .twelvedata
-                    .and_then(|symbol| snapshots.get(&normalize_symbol(symbol)).cloned());
+                    if snapshot.is_none() {
+                        unavailable_count += 1;
+                        warn!(
+                            target: MARKET_LOG_TARGET,
+                            "bulk quote missing symbol in response provider=twelvedata symbol={}",
+                            definition.code
+                        );
+                    }
 
-                if snapshot.is_none() {
-                    unavailable_count += 1;
-                }
+                    index_row_from_snapshot(definition, snapshot)
+                })
+                .collect();
 
-                index_row_from_snapshot(definition, snapshot)
-            })
-            .collect();
-
-        return Ok((rows, unavailable_count));
+            Ok((rows, unavailable_count))
+        }
+        Err(error) => {
+            warn!(
+                target: MARKET_LOG_TARGET,
+                "twelvedata bulk parse failed; falling back to symbol loop error={error}"
+            );
+            fetch_indices_with_symbol_loop(client, definitions, "twelvedata")
+        }
     }
-
-    fetch_indices_with_symbol_loop(client, definitions, "twelvedata")
 }
 
 fn parse_twelvedata_bulk_quotes(value: Value) -> Result<HashMap<String, MarketSnapshot>, String> {
@@ -809,7 +1083,8 @@ fn parse_twelvedata_bulk_quotes(value: Value) -> Result<HashMap<String, MarketSn
             for (symbol_key, quote_value) in object {
                 let quote: TwelveQuote = serde_json::from_value(quote_value)
                     .map_err(|error| format!("Twelve Data bulk quote parse failed: {error}"))?;
-                let snapshot = market_snapshot_from_twelve_quote_with_fallback(quote, "index", &symbol_key);
+                let snapshot =
+                    market_snapshot_from_twelve_quote_with_fallback(quote, "index", &symbol_key);
                 snapshots.insert(normalize_symbol(&snapshot.symbol), snapshot);
             }
         }
@@ -824,6 +1099,12 @@ fn parse_twelvedata_bulk_quotes(value: Value) -> Result<HashMap<String, MarketSn
         _ => return Err("Unexpected Twelve Data bulk response format".to_string()),
     }
 
+    debug!(
+        target: MARKET_LOG_TARGET,
+        "parsed twelvedata bulk quotes count={}",
+        snapshots.len()
+    );
+
     Ok(snapshots)
 }
 
@@ -835,7 +1116,11 @@ fn index_row_from_snapshot(
         .as_ref()
         .and_then(|snapshot| snapshot.currency.clone())
         .or_else(|| Some(definition.currency.to_string()));
-    let technical_rating = technical_rating(snapshot.as_ref().and_then(|snapshot| snapshot.change_percent));
+    let technical_rating = technical_rating(
+        snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.change_percent),
+    );
 
     IndexOverviewRow {
         id: definition.id.to_string(),
@@ -845,11 +1130,15 @@ fn index_row_from_snapshot(
         currency,
         price: snapshot.as_ref().and_then(|snapshot| snapshot.price),
         change: snapshot.as_ref().and_then(|snapshot| snapshot.change),
-        change_percent: snapshot.as_ref().and_then(|snapshot| snapshot.change_percent),
+        change_percent: snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.change_percent),
         open: snapshot.as_ref().and_then(|snapshot| snapshot.open),
         high: snapshot.as_ref().and_then(|snapshot| snapshot.high),
         low: snapshot.as_ref().and_then(|snapshot| snapshot.low),
-        previous_close: snapshot.as_ref().and_then(|snapshot| snapshot.previous_close),
+        previous_close: snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.previous_close),
         as_of: snapshot.and_then(|snapshot| snapshot.as_of),
         technical_rating,
     }
@@ -877,13 +1166,7 @@ fn fetch_finnhub(
         urlencoding::encode(&token)
     );
 
-    let quote: FinnhubQuote = client
-        .get(url)
-        .send()
-        .and_then(|response| response.error_for_status())
-        .map_err(|error| format!("Finnhub request failed: {error}"))?
-        .json()
-        .map_err(|error| format!("Finnhub response parse failed: {error}"))?;
+    let quote: FinnhubQuote = request_json(client, url, "finnhub", "quote", symbol)?;
 
     Ok(MarketSnapshot {
         provider: "finnhub".to_string(),
@@ -915,18 +1198,20 @@ fn fetch_massive(
         urlencoding::encode(&token)
     );
 
-    let response: MassiveAggResponse = client
-        .get(url)
-        .send()
-        .and_then(|response| response.error_for_status())
-        .map_err(|error| format!("Massive request failed: {error}"))?
-        .json()
-        .map_err(|error| format!("Massive response parse failed: {error}"))?;
+    let response: MassiveAggResponse =
+        request_json(client, url, "massive", "previous aggregate", symbol)?;
 
     let result = response
         .results
         .and_then(|mut results| results.pop())
-        .ok_or_else(|| "Massive returned no aggregate data for this symbol".to_string())?;
+        .ok_or_else(|| {
+            let message = "Massive returned no aggregate data for this symbol".to_string();
+            warn!(
+                target: MARKET_LOG_TARGET,
+                "massive previous aggregate empty symbol={symbol}"
+            );
+            message
+        })?;
 
     let change = match (result.c, result.o) {
         (Some(close), Some(open)) => Some(close - open),
@@ -967,15 +1252,15 @@ fn fetch_twelve_data(
         urlencoding::encode(&token)
     );
 
-    let quote: TwelveQuote = client
-        .get(url)
-        .send()
-        .and_then(|response| response.error_for_status())
-        .map_err(|error| format!("Twelve Data request failed: {error}"))?
-        .json()
-        .map_err(|error| format!("Twelve Data response parse failed: {error}"))?;
+    let quote: TwelveQuote = request_json(client, url, "twelvedata", "quote", symbol)?;
 
     if let Some(message) = quote.message.clone() {
+        error!(
+            target: MARKET_LOG_TARGET,
+            "twelvedata quote returned error symbol={} message={}",
+            symbol,
+            message
+        );
         return Err(format!("Twelve Data returned an error: {message}"));
     }
 
@@ -1014,13 +1299,39 @@ fn market_snapshot_from_twelve_quote_with_fallback(
 }
 
 fn parse_number(value: Option<String>) -> Option<f64> {
-    value.and_then(|value| value.parse::<f64>().ok())
+    value.and_then(|value| match value.parse::<f64>() {
+        Ok(number) => Some(number),
+        Err(error) => {
+            warn!(
+                target: MARKET_LOG_TARGET,
+                "failed to parse numeric field value={} error={error}",
+                value
+            );
+            None
+        }
+    })
+}
+
+fn ansi_color_for_level(level: Level) -> &'static str {
+    match level {
+        Level::Trace => "\x1b[90m",
+        Level::Debug => "\x1b[36m",
+        Level::Info => "\x1b[32m",
+        Level::Warn => "\x1b[33m",
+        Level::Error => "\x1b[31m",
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            info!(
+                target: MARKET_LOG_TARGET,
+                "tauri setup start package={} version={}",
+                app.package_info().name,
+                app.package_info().version
+            );
             if let (Some(window), Some(icon)) =
                 (app.get_webview_window("main"), app.default_window_icon())
             {
@@ -1034,6 +1345,24 @@ pub fn run() {
             get_market_snapshot,
             get_indices_overview
         ])
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(LevelFilter::Debug)
+                .level_for("reqwest", LevelFilter::Warn)
+                .level_for("hyper", LevelFilter::Warn)
+                .level_for("tao", LevelFilter::Warn)
+                .targets([
+                    Target::new(TargetKind::Stdout).format(|out, message, record| {
+                        let color = ansi_color_for_level(record.level());
+                        out.finish(format_args!("{color}{message}\x1b[0m"))
+                    }),
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("backend".into()),
+                    }),
+                    Target::new(TargetKind::Webview),
+                ])
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
