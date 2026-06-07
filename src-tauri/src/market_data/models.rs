@@ -15,6 +15,7 @@ pub(crate) struct MarketSnapshot {
     pub(crate) volume: Option<f64>,
     pub(crate) currency: Option<String>,
     pub(crate) as_of: Option<String>,
+    pub(crate) technical_rating: Option<String>,
     pub(crate) source_note: String,
 }
 
@@ -149,6 +150,7 @@ pub(crate) struct MarketChartSeriesResponse {
     pub(crate) series_type: String,
     pub(crate) source_note: String,
     pub(crate) currency: Option<String>,
+    pub(crate) technical_rating: Option<String>,
     pub(crate) points: Vec<MarketChartPoint>,
 }
 

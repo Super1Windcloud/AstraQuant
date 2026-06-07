@@ -145,10 +145,11 @@ fn get_indices_overview_sync(
 
     let updated_at = rows.iter().find_map(|row| row.as_of.clone());
     let source_note = if unavailable_count == 0 {
-        "Finnhub aggregated quotes".to_string()
+        format!("{} aggregated quotes", provider_label(provider))
     } else {
         format!(
-            "Finnhub aggregated quotes · {} symbol(s) unavailable",
+            "{} aggregated quotes · {} symbol(s) unavailable",
+            provider_label(provider),
             unavailable_count
         )
     };
@@ -473,6 +474,7 @@ fn market_snapshot_from_chart_series(chart: MarketChartSeriesResponse) -> Market
         volume: None,
         currency: chart.currency,
         as_of: latest.map(|point| point.time.clone()),
+        technical_rating: chart.technical_rating,
         source_note: chart.source_note,
     }
 }
@@ -1155,6 +1157,7 @@ fn fetch_finnhub_candle_series(
         series_type: "candlestick".to_string(),
         source_note: source_note.to_string(),
         currency: currency.map(str::to_string),
+        technical_rating: None,
         points,
     })
 }
@@ -1220,6 +1223,7 @@ fn fetch_alpha_daily_chart_series(
         series_type: "candlestick".to_string(),
         source_note: "Alpha Vantage TIME_SERIES_DAILY".to_string(),
         currency: Some(currency.to_string()),
+        technical_rating: None,
         points,
     })
 }
@@ -1287,6 +1291,7 @@ fn fetch_alpha_digital_chart_series(
         series_type: "candlestick".to_string(),
         source_note: "Alpha Vantage DIGITAL_CURRENCY_DAILY".to_string(),
         currency: Some(market.to_string()),
+        technical_rating: None,
         points,
     })
 }
@@ -1357,6 +1362,7 @@ fn fetch_alpha_commodity_chart_series(
         series_type: "area".to_string(),
         source_note: "Alpha Vantage commodity daily series".to_string(),
         currency: Some("USD".to_string()),
+        technical_rating: None,
         points,
     })
 }
@@ -1529,9 +1535,7 @@ fn asset_row_from_snapshot(
         .and_then(|snapshot| snapshot.currency.clone())
         .or_else(|| Some(definition.currency.to_string()));
     let technical_rating = technical_rating(
-        snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.change_percent),
+        snapshot.as_ref(),
     );
 
     AssetOverviewRow {
@@ -1582,7 +1586,7 @@ fn market_detail_from_asset(
         previous_close: snapshot.previous_close,
         as_of: snapshot.as_of.clone(),
         source_note: snapshot.source_note.clone(),
-        technical_rating: technical_rating(snapshot.change_percent),
+        technical_rating: technical_rating(Some(&snapshot)),
         tradingview_symbol: asset_tradingview_symbol(asset, definition.id).map(str::to_string),
     })
 }
@@ -1596,9 +1600,7 @@ fn index_row_from_snapshot(
         .and_then(|snapshot| snapshot.currency.clone())
         .or_else(|| Some(definition.currency.to_string()));
     let technical_rating = technical_rating(
-        snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.change_percent),
+        snapshot.as_ref(),
     );
 
     IndexOverviewRow {
@@ -1647,7 +1649,7 @@ fn market_detail_from_index(
         previous_close: snapshot.previous_close,
         as_of: snapshot.as_of.clone(),
         source_note: snapshot.source_note.clone(),
-        technical_rating: technical_rating(snapshot.change_percent),
+        technical_rating: technical_rating(Some(&snapshot)),
         tradingview_symbol: index_tradingview_symbol(definition.id).map(str::to_string),
     })
 }
@@ -1663,8 +1665,12 @@ fn fetch_index_snapshot(
 }
 
 
-fn technical_rating(change_percent: Option<f64>) -> String {
-    match change_percent {
+fn technical_rating(snapshot: Option<&MarketSnapshot>) -> String {
+    if let Some(value) = snapshot.and_then(|snapshot| snapshot.technical_rating.clone()) {
+        return value;
+    }
+
+    match snapshot.and_then(|snapshot| snapshot.change_percent) {
         Some(value) if value >= 2.0 => "Strong buy".to_string(),
         Some(value) if value >= 0.4 => "Buy".to_string(),
         Some(value) if value <= -2.0 => "Strong sell".to_string(),
@@ -1714,6 +1720,7 @@ fn fetch_finnhub(
         volume: None,
         currency: None,
         as_of: quote.t.map(|timestamp| timestamp.to_string()),
+        technical_rating: None,
         source_note: "Finnhub quote endpoint".to_string(),
     })
 }
@@ -1754,6 +1761,7 @@ fn fetch_alpha_global_quote(
             .get("07. latest trading day")
             .and_then(Value::as_str)
             .map(str::to_string),
+        technical_rating: None,
         source_note: "Alpha Vantage GLOBAL_QUOTE".to_string(),
     })
 }
@@ -1808,6 +1816,7 @@ fn fetch_alpha_digital_daily(
         volume: None,
         currency: Some(market.to_string()),
         as_of: Some(latest_date.to_string()),
+        technical_rating: None,
         source_note: "Alpha Vantage DIGITAL_CURRENCY_DAILY".to_string(),
     })
 }
@@ -1883,6 +1892,7 @@ fn fetch_alpha_commodity_series(
             .get("date")
             .and_then(Value::as_str)
             .map(str::to_string),
+        technical_rating: None,
         source_note: "Alpha Vantage commodity daily series".to_string(),
     })
 }

@@ -28,6 +28,7 @@ async function main() {
 
   const client = new TradingView.Client(clientOptions);
   const chart = new client.Session.Chart();
+  let taRating = null;
 
   const timeout = setTimeout(() => {
     shutdown(
@@ -64,12 +65,21 @@ async function main() {
       interval: timeframe,
       series_type: "candlestick",
       currency: chart.infos.currency_code || chart.infos.currency_id || null,
+      technical_rating: taRating,
       source_note: `TradingView chart session (${symbol})`,
       points,
     };
 
     shutdown(0, payload, client, timeout);
   });
+
+  void TradingView.getTA(symbol)
+    .then((ta) => {
+      taRating = normalizeTaRating(ta);
+    })
+    .catch(() => {
+      taRating = null;
+    });
 
   chart.setMarket(symbol, {
     timeframe,
@@ -79,6 +89,33 @@ async function main() {
 
 function toNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeTaRating(ta) {
+  const daily = ta && typeof ta === "object" ? ta["1D"] : null;
+  const score = daily && typeof daily.All === "number" ? daily.All : null;
+
+  if (score === null) {
+    return null;
+  }
+
+  if (score >= 0.5) {
+    return "Strong buy";
+  }
+
+  if (score > 0) {
+    return "Buy";
+  }
+
+  if (score <= -0.5) {
+    return "Strong sell";
+  }
+
+  if (score < 0) {
+    return "Sell";
+  }
+
+  return "Neutral";
 }
 
 function shutdown(code, payload, client, timeout) {
