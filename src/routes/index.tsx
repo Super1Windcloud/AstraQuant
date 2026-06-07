@@ -17,11 +17,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n } from "@/lib/i18n"
 import {
   getIndicesOverview,
+  type IndexCategoryCount,
   type IndexOverviewRow,
-  type IndicesCategory,
-  indexCategories,
-  indexCategoryIds,
   type MarketProvider,
+  type MarketViewTab,
   providerLabels,
 } from "@/lib/market-data"
 import { useMarketProviderStore } from "@/lib/market-provider"
@@ -31,17 +30,17 @@ export const Route = createFileRoute("/")({
   component: IndicesPage,
 })
 
-const defaultCategory: IndicesCategory = "all"
+const defaultCategory = "all"
 
 function IndicesPage() {
   const { t, locale } = useI18n()
   const { aggregateProvider } = useMarketProviderStore()
-  const [selectedCategory, setSelectedCategory] = useState<IndicesCategory>(defaultCategory)
+  const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory)
   const [selectedTab, setSelectedTab] = useState("overview")
   const [reloadToken, setReloadToken] = useState(0)
   const [rows, setRows] = useState<IndexOverviewRow[]>([])
-  const [categoryCounts, setCategoryCounts] =
-    useState<Record<IndicesCategory, number>>(buildEmptyCategoryCounts)
+  const [categories, setCategories] = useState<IndexCategoryCount[]>([])
+  const [tabs, setTabs] = useState<MarketViewTab[]>([])
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [sourceNote, setSourceNote] = useState("")
   const [resolvedProvider, setResolvedProvider] = useState<MarketProvider | null>(null)
@@ -70,21 +69,26 @@ function IndicesPage() {
         setUpdatedAt(overview.updated_at)
         setSourceNote(overview.source_note)
         setResolvedProvider(overview.provider)
-        setCategoryCounts(() => {
-          const next = buildEmptyCategoryCounts()
-
-          for (const item of overview.categories) {
-            next[item.id] = item.total
-          }
-
-          return next
-        })
+        setCategories(overview.categories)
+        setTabs(overview.tabs)
+        setSelectedCategory((current) =>
+          overview.categories.some((item) => item.id === current)
+            ? current
+            : overview.category || overview.categories[0]?.id || defaultCategory
+        )
+        setSelectedTab((current) =>
+          overview.tabs.some((item) => item.id === current)
+            ? current
+            : (overview.tabs[0]?.id ?? "overview")
+        )
       } catch (requestError) {
         if (ignore) {
           return
         }
 
         setRows([])
+        setCategories([])
+        setTabs([])
         setUpdatedAt(null)
         setSourceNote("")
         setResolvedProvider(null)
@@ -102,6 +106,15 @@ function IndicesPage() {
       ignore = true
     }
   }, [aggregateProvider, reloadToken, selectedCategory])
+
+  const categoryCounts = useMemo(
+    () =>
+      categories.reduce<Record<string, number>>((result, item) => {
+        result[item.id] = item.total
+        return result
+      }, {}),
+    [categories]
+  )
 
   const displayRows = useMemo(() => {
     const next = [...rows]
@@ -127,22 +140,19 @@ function IndicesPage() {
   }, [rows, selectedTab])
 
   const countLabel = useMemo(() => {
-    const total = categoryCounts[selectedCategory]
+    const total = categoryCounts[selectedCategory] ?? 0
     return `${t("indicesTableSymbol")} ${total}`
   }, [categoryCounts, selectedCategory, t])
   const isInitialLoading = isLoading && rows.length === 0
 
   return (
     <main className="flex min-h-full bg-background text-foreground">
-      <MarketSidebar
-        currentView={t("assetIndex")}
-        footer={formatAggregateProvider(aggregateProvider, resolvedProvider, t)}
-      />
+      <MarketSidebar footer={formatAggregateProvider(aggregateProvider, resolvedProvider, t)} />
 
       <section className="min-w-0 flex-1 bg-background">
         <div className="mx-auto flex w-full max-w-[1600px] flex-col px-5 pt-6 pb-8 sm:px-8">
           <div className="flex flex-wrap gap-2">
-            {indexCategories.map((category) => {
+            {categories.map((category) => {
               const isActive = selectedCategory === category.id
 
               return (
@@ -157,7 +167,7 @@ function IndicesPage() {
                       : "border-border/60 bg-background/50 text-muted-foreground hover:bg-accent/35 hover:text-foreground"
                   )}
                 >
-                  {t(category.i18nKey as never)}
+                  {t(category.label_key as never)}
                 </button>
               )
             })}
@@ -175,24 +185,15 @@ function IndicesPage() {
           <div className="mt-8 flex items-center justify-between gap-4 border-b border-border/60">
             <Tabs value={selectedTab} onValueChange={setSelectedTab} className="gap-0">
               <TabsList variant="line" className="h-11 gap-5 p-0 text-muted-foreground">
-                <TabsTrigger
-                  value="overview"
-                  className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
-                >
-                  {t("indicesTabOverview")}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="performance"
-                  className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
-                >
-                  {t("indicesTabPerformance")}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="technicals"
-                  className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
-                >
-                  {t("indicesTabTechnicals")}
-                </TabsTrigger>
+                {tabs.map((tab) => (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.id}
+                    className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
+                  >
+                    {t(tab.label_key as never)}
+                  </TabsTrigger>
+                ))}
               </TabsList>
             </Tabs>
 
@@ -228,7 +229,7 @@ function IndicesPage() {
                   <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
                     <div className="pl-4">
                       <div>{t("indicesTableSymbol")}</div>
-                      <div className="mt-1">{categoryCounts[selectedCategory]}</div>
+                      <div className="mt-1">{categoryCounts[selectedCategory] ?? 0}</div>
                     </div>
                   </TableHead>
                   <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
@@ -366,16 +367,6 @@ function IndexBadge({ symbol }: { symbol: string }) {
         {symbol.slice(0, 2)}
       </div>
     </div>
-  )
-}
-
-function buildEmptyCategoryCounts(): Record<IndicesCategory, number> {
-  return indexCategoryIds.reduce(
-    (result, id) => {
-      result[id] = 0
-      return result
-    },
-    {} as Record<IndicesCategory, number>
   )
 }
 

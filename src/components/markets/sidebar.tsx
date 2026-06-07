@@ -7,7 +7,6 @@ import { marketNavigationItems } from "@/lib/market-data"
 import { cn } from "@/lib/utils"
 
 interface MarketSidebarProps {
-  currentView: string
   footer?: ReactNode
 }
 
@@ -29,7 +28,7 @@ function getCompactLabel(value: string) {
   return label.slice(0, 1) || "•"
 }
 
-export function MarketSidebar({ currentView, footer }: MarketSidebarProps) {
+export function MarketSidebar({ footer }: MarketSidebarProps) {
   const { t } = useI18n()
   const [isCollapsed, setIsCollapsed] = useState(readCollapsedState)
 
@@ -102,17 +101,6 @@ export function MarketSidebar({ currentView, footer }: MarketSidebarProps) {
             )
           })}
         </div>
-
-        {isCollapsed ? null : (
-          <>
-            <div className="mt-6 px-2 text-[11px] tracking-wide text-muted-foreground uppercase">
-              {t("sidebarCurrentView")}
-            </div>
-            <div className="mt-2 rounded-md border border-border/60 bg-background/70 px-3 py-3 text-sm text-foreground/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/55">
-              {currentView}
-            </div>
-          </>
-        )}
       </div>
 
       {isCollapsed ? null : (

@@ -21,17 +21,32 @@ pub(crate) struct AssetDefinition {
     pub(crate) finnhub_symbol: Option<&'static str>,
 }
 
-pub(crate) const STOCK_CATEGORY_IDS: &[&str] =
-    &["mega-cap", "internet", "semiconductors", "china-adr"];
-pub(crate) const ETF_CATEGORY_IDS: &[&str] =
-    &["broad-market", "sectors", "fixed-income", "global-thematic"];
-pub(crate) const CRYPTO_CATEGORY_IDS: &[&str] = &[
-    "majors",
-    "smart-contracts",
-    "payments-meme",
-    "infrastructure",
+type AssetCategoryMeta = (&'static str, &'static str);
+
+pub(crate) const STOCK_CATEGORY_ITEMS: &[AssetCategoryMeta] = &[
+    ("mega-cap", "stocksSectionMegaCap"),
+    ("internet", "stocksSectionInternet"),
+    ("semiconductors", "stocksSectionSemiconductors"),
+    ("china-adr", "stocksSectionChinaAdr"),
 ];
-pub(crate) const FUTURES_CATEGORY_IDS: &[&str] = &["energy", "metals", "grains", "softs"];
+pub(crate) const ETF_CATEGORY_ITEMS: &[AssetCategoryMeta] = &[
+    ("broad-market", "etfSectionBroadMarket"),
+    ("sectors", "etfSectionSectors"),
+    ("fixed-income", "etfSectionFixedIncome"),
+    ("global-thematic", "etfSectionGlobalThematic"),
+];
+pub(crate) const CRYPTO_CATEGORY_ITEMS: &[AssetCategoryMeta] = &[
+    ("majors", "cryptoSectionMajors"),
+    ("smart-contracts", "cryptoSectionSmartContracts"),
+    ("payments-meme", "cryptoSectionPaymentsMeme"),
+    ("infrastructure", "cryptoSectionInfrastructure"),
+];
+pub(crate) const FUTURES_CATEGORY_ITEMS: &[AssetCategoryMeta] = &[
+    ("energy", "futuresSectionEnergy"),
+    ("metals", "futuresSectionMetals"),
+    ("grains", "futuresSectionGrains"),
+    ("softs", "futuresSectionSofts"),
+];
 
 pub(crate) const STOCK_DEFINITIONS: &[AssetDefinition] = &[
     AssetDefinition {
@@ -634,12 +649,12 @@ pub(crate) fn supported_assets() -> &'static [&'static str] {
     &["stocks", "etf", "crypto", "futures"]
 }
 
-pub(crate) fn asset_category_ids(asset: &str) -> Option<&'static [&'static str]> {
+pub(crate) fn asset_category_items(asset: &str) -> Option<&'static [AssetCategoryMeta]> {
     match asset {
-        "stocks" => Some(STOCK_CATEGORY_IDS),
-        "etf" => Some(ETF_CATEGORY_IDS),
-        "crypto" => Some(CRYPTO_CATEGORY_IDS),
-        "futures" => Some(FUTURES_CATEGORY_IDS),
+        "stocks" => Some(STOCK_CATEGORY_ITEMS),
+        "etf" => Some(ETF_CATEGORY_ITEMS),
+        "crypto" => Some(CRYPTO_CATEGORY_ITEMS),
+        "futures" => Some(FUTURES_CATEGORY_ITEMS),
         _ => None,
     }
 }
@@ -655,7 +670,7 @@ pub(crate) fn definitions_for_asset(asset: &str) -> Option<&'static [AssetDefini
 }
 
 pub(crate) fn category_counts(asset: &str) -> Vec<AssetCategoryCount> {
-    let Some(categories) = asset_category_ids(asset) else {
+    let Some(categories) = asset_category_items(asset) else {
         return Vec::new();
     };
     let Some(definitions) = definitions_for_asset(asset) else {
@@ -664,11 +679,12 @@ pub(crate) fn category_counts(asset: &str) -> Vec<AssetCategoryCount> {
 
     categories
         .iter()
-        .map(|category| AssetCategoryCount {
-            id: (*category).to_string(),
+        .map(|(category_id, label_key)| AssetCategoryCount {
+            id: (*category_id).to_string(),
+            label_key: (*label_key).to_string(),
             total: definitions
                 .iter()
-                .filter(|definition| definition.category == *category)
+                .filter(|definition| definition.category == *category_id)
                 .count(),
         })
         .collect()

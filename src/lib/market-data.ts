@@ -19,8 +19,14 @@ export const indexCategoryIds = [
 export type IndicesCategory = (typeof indexCategoryIds)[number]
 
 export interface IndexCategoryCount {
-  id: IndicesCategory
+  id: string
+  label_key: string
   total: number
+}
+
+export interface MarketViewTab {
+  id: string
+  label_key: string
 }
 
 export interface IndexOverviewRow {
@@ -42,10 +48,11 @@ export interface IndexOverviewRow {
 
 export interface IndicesOverviewResponse {
   provider: MarketProvider
-  category: IndicesCategory
+  category: string
   updated_at: string | null
   source_note: string
   categories: IndexCategoryCount[]
+  tabs: MarketViewTab[]
   rows: IndexOverviewRow[]
 }
 
@@ -398,15 +405,19 @@ const previewRows: PreviewIndexRow[] = [
   },
 ]
 
-const previewCategoryCounts = indexCategoryIds.map((id) => ({
-  id,
-  total: previewRows.filter((row) => row.categories.includes(id)).length,
+const previewCategoryCounts = indexCategories.map((category) => ({
+  id: category.id,
+  label_key: category.i18nKey,
+  total: previewRows.filter((row) => row.categories.includes(category.id)).length,
 }))
 
-export async function getIndicesOverview(
-  category: IndicesCategory,
-  preferredProvider?: MarketProvider
-) {
+const defaultPreviewTabs: MarketViewTab[] = [
+  { id: "overview", label_key: "indicesTabOverview" },
+  { id: "performance", label_key: "indicesTabPerformance" },
+  { id: "technicals", label_key: "indicesTabTechnicals" },
+]
+
+export async function getIndicesOverview(category: string, preferredProvider?: MarketProvider) {
   if (!isTauriRuntime()) {
     return buildPreviewIndicesOverview(category)
   }
@@ -421,17 +432,21 @@ function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 }
 
-function buildPreviewIndicesOverview(category: IndicesCategory): IndicesOverviewResponse {
+function buildPreviewIndicesOverview(category: string): IndicesOverviewResponse {
+  const normalizedCategory = indexCategoryIds.includes(category as IndicesCategory)
+    ? (category as IndicesCategory)
+    : "all"
   const rows = previewRows
-    .filter((row) => row.categories.includes(category))
+    .filter((row) => row.categories.includes(normalizedCategory))
     .map(({ categories: _categories, ...row }) => row)
 
   return {
     provider: "finnhub",
-    category,
+    category: normalizedCategory,
     updated_at: rows[0]?.as_of ?? null,
     source_note: "Preview data for browser layout verification",
     categories: previewCategoryCounts,
+    tabs: defaultPreviewTabs,
     rows,
   }
 }
@@ -440,6 +455,7 @@ export type MarketAsset = "stocks" | "etf" | "crypto" | "futures"
 
 export interface AssetCategoryCount {
   id: string
+  label_key: string
   total: number
 }
 
@@ -467,6 +483,7 @@ export interface AssetOverviewResponse {
   updated_at: string | null
   source_note: string
   categories: AssetCategoryCount[]
+  tabs: MarketViewTab[]
   rows: AssetOverviewRow[]
 }
 
@@ -943,6 +960,7 @@ function buildPreviewAssetOverview(asset: MarketAsset): AssetOverviewResponse {
   const rows = seeds.map((seed, index) => buildPreviewAssetRow(asset, seed, index))
   const categories = marketAssetConfigs[asset].categories.map((category) => ({
     id: category.id,
+    label_key: category.i18nKey,
     total: rows.filter((row) => row.category_id === category.id).length,
   }))
 
@@ -952,6 +970,7 @@ function buildPreviewAssetOverview(asset: MarketAsset): AssetOverviewResponse {
     updated_at: rows[0]?.as_of ?? null,
     source_note: "Preview data for browser layout verification",
     categories,
+    tabs: defaultPreviewTabs,
     rows,
   }
 }

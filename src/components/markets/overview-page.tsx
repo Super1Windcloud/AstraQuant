@@ -15,10 +15,12 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n } from "@/lib/i18n"
 import {
+  type AssetCategoryCount,
   type AssetOverviewRow,
   getAssetOverview,
   type MarketAsset,
   type MarketProvider,
+  type MarketViewTab,
   marketAssetConfigs,
   providerLabels,
 } from "@/lib/market-data"
@@ -34,12 +36,14 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
   const { t, locale } = useI18n()
   const { aggregateProvider } = useMarketProviderStore()
   const [selectedTab, setSelectedTab] = useState("overview")
+  const [activeCategoryId, setActiveCategoryId] = useState("")
   const [reloadToken, setReloadToken] = useState(0)
   const [rows, setRows] = useState<AssetOverviewRow[]>([])
+  const [categories, setCategories] = useState<AssetCategoryCount[]>([])
+  const [tabs, setTabs] = useState<MarketViewTab[]>([])
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [sourceNote, setSourceNote] = useState("")
   const [resolvedProvider, setResolvedProvider] = useState<MarketProvider | null>(null)
-  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,14 +66,20 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
         }
 
         setRows(overview.rows)
+        setCategories(overview.categories)
+        setTabs(overview.tabs)
         setUpdatedAt(overview.updated_at)
         setSourceNote(overview.source_note)
         setResolvedProvider(overview.provider)
-        setCategoryCounts(
-          overview.categories.reduce<Record<string, number>>((result, category) => {
-            result[category.id] = category.total
-            return result
-          }, {})
+        setActiveCategoryId((current) =>
+          overview.categories.some((item) => item.id === current)
+            ? current
+            : (overview.categories[0]?.id ?? "")
+        )
+        setSelectedTab((current) =>
+          overview.tabs.some((item) => item.id === current)
+            ? current
+            : (overview.tabs[0]?.id ?? "overview")
         )
       } catch (requestError) {
         if (ignore) {
@@ -77,10 +87,11 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
         }
 
         setRows([])
+        setCategories([])
+        setTabs([])
         setUpdatedAt(null)
         setSourceNote("")
         setResolvedProvider(null)
-        setCategoryCounts({})
         setError(requestError instanceof Error ? requestError.message : String(requestError))
       } finally {
         if (!ignore) {
@@ -97,26 +108,53 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
   }, [aggregateProvider, asset, reloadToken])
 
   const sections = useMemo(() => {
-    return config.categories.map((category) => ({
+    return categories.map((category) => ({
       ...category,
       rows: sortRowsForTab(
         rows.filter((row) => row.category_id === category.id),
         selectedTab
       ),
     }))
-  }, [config.categories, rows, selectedTab])
+  }, [categories, rows, selectedTab])
   const isInitialLoading = isLoading && rows.length === 0
+
+  function scrollToCategory(categoryId: string) {
+    setActiveCategoryId(categoryId)
+    document.getElementById(`market-section-${categoryId}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    })
+  }
 
   return (
     <main className="flex min-h-full bg-background text-foreground">
-      <MarketSidebar
-        currentView={t(config.navI18nKey as never)}
-        footer={formatAggregateProvider(aggregateProvider, resolvedProvider, t)}
-      />
+      <MarketSidebar footer={formatAggregateProvider(aggregateProvider, resolvedProvider, t)} />
 
       <section className="min-w-0 flex-1 bg-background">
         <div className="mx-auto flex w-full max-w-[1600px] flex-col px-5 pt-6 pb-8 sm:px-8">
-          <div className="max-w-[860px]">
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category) => {
+              const isActive = activeCategoryId === category.id
+
+              return (
+                <button
+                  type="button"
+                  key={category.id}
+                  onClick={() => scrollToCategory(category.id)}
+                  className={cn(
+                    "inline-flex h-8 items-center rounded-full border px-3 text-[13px] backdrop-blur-md transition-colors",
+                    isActive
+                      ? "border-primary/35 bg-background/72 text-foreground"
+                      : "border-border/60 bg-background/50 text-muted-foreground hover:bg-accent/35 hover:text-foreground"
+                  )}
+                >
+                  {t(category.label_key as never)}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-7 max-w-[860px]">
             <h1 className="text-[22px] font-semibold tracking-normal text-foreground">
               {t(config.titleI18nKey as never)}
             </h1>
@@ -128,24 +166,15 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
           <div className="mt-8 flex items-center justify-between gap-4 border-b border-border/60">
             <Tabs value={selectedTab} onValueChange={setSelectedTab} className="gap-0">
               <TabsList variant="line" className="h-11 gap-5 p-0 text-muted-foreground">
-                <TabsTrigger
-                  value="overview"
-                  className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
-                >
-                  {t("indicesTabOverview")}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="performance"
-                  className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
-                >
-                  {t("indicesTabPerformance")}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="technicals"
-                  className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
-                >
-                  {t("indicesTabTechnicals")}
-                </TabsTrigger>
+                {tabs.map((tab) => (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.id}
+                    className="h-11 rounded-none px-0 text-[15px] data-[state=active]:text-foreground after:bg-primary"
+                  >
+                    {t(tab.label_key as never)}
+                  </TabsTrigger>
+                ))}
               </TabsList>
             </Tabs>
 
@@ -175,14 +204,14 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
           ) : null}
 
           {sections.map((section) => (
-            <section key={section.id} className="mt-8">
+            <section key={section.id} id={`market-section-${section.id}`} className="mt-8">
               <div className="mb-3 flex items-end justify-between gap-4">
                 <div>
                   <h2 className="text-[18px] font-semibold text-foreground">
-                    {t(section.i18nKey as never)}
+                    {t(section.label_key as never)}
                   </h2>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {categoryCounts[section.id] ?? section.rows.length} {t("indicesTableSymbol")}
+                    {section.total} {t("indicesTableSymbol")}
                   </div>
                 </div>
               </div>
@@ -194,9 +223,7 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
                       <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
                         <div className="pl-4">
                           <div>{t("indicesTableSymbol")}</div>
-                          <div className="mt-1">
-                            {categoryCounts[section.id] ?? section.rows.length}
-                          </div>
+                          <div className="mt-1">{section.total}</div>
                         </div>
                       </TableHead>
                       <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">

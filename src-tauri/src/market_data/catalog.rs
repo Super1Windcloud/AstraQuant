@@ -24,6 +24,20 @@ pub(crate) const INDEX_CATEGORY_IDS: &[&str] = &[
     "africa",
 ];
 
+pub(crate) const INDEX_CATEGORY_ITEMS: &[(&str, &str)] = &[
+    ("all", "indicesFilterAll"),
+    ("major", "indicesFilterMajor"),
+    ("us", "indicesFilterUs"),
+    ("sp-sectors", "indicesFilterSectors"),
+    ("currency", "indicesFilterCurrency"),
+    ("americas", "indicesFilterAmericas"),
+    ("europe", "indicesFilterEurope"),
+    ("asia", "indicesFilterAsia"),
+    ("pacific", "indicesFilterPacific"),
+    ("middle-east", "indicesFilterMiddleEast"),
+    ("africa", "indicesFilterAfrica"),
+];
+
 pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
     IndexDefinition {
         id: "spx",
@@ -287,10 +301,11 @@ pub(crate) fn definitions_for_category(category: &str) -> Vec<&'static IndexDefi
 }
 
 pub(crate) fn category_counts() -> Vec<IndexCategoryCount> {
-    INDEX_CATEGORY_IDS
+    INDEX_CATEGORY_ITEMS
         .iter()
-        .map(|category_id| IndexCategoryCount {
+        .map(|(category_id, label_key)| IndexCategoryCount {
             id: (*category_id).to_string(),
+            label_key: (*label_key).to_string(),
             total: definitions_for_category(category_id).len(),
         })
         .collect()

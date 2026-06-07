@@ -21,13 +21,21 @@ pub(crate) struct MarketSnapshot {
 #[derive(Debug, Serialize)]
 pub(crate) struct IndexCategoryCount {
     pub(crate) id: String,
+    pub(crate) label_key: String,
     pub(crate) total: usize,
 }
 
 #[derive(Debug, Serialize)]
 pub(crate) struct AssetCategoryCount {
     pub(crate) id: String,
+    pub(crate) label_key: String,
     pub(crate) total: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct MarketViewTab {
+    pub(crate) id: String,
+    pub(crate) label_key: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,6 +63,7 @@ pub(crate) struct IndicesOverviewResponse {
     pub(crate) updated_at: Option<String>,
     pub(crate) source_note: String,
     pub(crate) categories: Vec<IndexCategoryCount>,
+    pub(crate) tabs: Vec<MarketViewTab>,
     pub(crate) rows: Vec<IndexOverviewRow>,
 }
 
@@ -84,6 +93,7 @@ pub(crate) struct AssetOverviewResponse {
     pub(crate) updated_at: Option<String>,
     pub(crate) source_note: String,
     pub(crate) categories: Vec<AssetCategoryCount>,
+    pub(crate) tabs: Vec<MarketViewTab>,
     pub(crate) rows: Vec<AssetOverviewRow>,
 }
 

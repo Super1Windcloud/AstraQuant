@@ -7,7 +7,7 @@ use super::catalog::{
 };
 use super::models::{
     AssetOverviewResponse, AssetOverviewRow, FinnhubQuote, IndexOverviewRow,
-    IndicesOverviewResponse, MarketSnapshot,
+    IndicesOverviewResponse, MarketSnapshot, MarketViewTab,
 };
 use log::{debug, error, info, warn};
 use serde_json::{Map, Value};
@@ -124,6 +124,7 @@ pub(crate) fn get_indices_overview(
         updated_at,
         source_note,
         categories: category_counts(),
+        tabs: default_market_tabs(),
         rows,
     };
 
@@ -187,6 +188,7 @@ pub(crate) fn get_asset_overview(
         updated_at,
         source_note,
         categories,
+        tabs: default_market_tabs(),
         rows,
     };
 
@@ -508,6 +510,23 @@ fn provider_label(provider: &str) -> &'static str {
         "finnhub" => "Finnhub",
         _ => "Unknown provider",
     }
+}
+
+fn default_market_tabs() -> Vec<MarketViewTab> {
+    vec![
+        MarketViewTab {
+            id: "overview".to_string(),
+            label_key: "indicesTabOverview".to_string(),
+        },
+        MarketViewTab {
+            id: "performance".to_string(),
+            label_key: "indicesTabPerformance".to_string(),
+        },
+        MarketViewTab {
+            id: "technicals".to_string(),
+            label_key: "indicesTabTechnicals".to_string(),
+        },
+    ]
 }
 
 fn normalize_asset(asset: &str) -> Result<String, String> {
