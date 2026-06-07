@@ -108,13 +108,13 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
   const isInitialLoading = isLoading && rows.length === 0
 
   return (
-    <main className="flex min-h-full bg-background/24 text-foreground">
+    <main className="flex min-h-full bg-background text-foreground">
       <MarketSidebar
         currentView={t(config.navI18nKey as never)}
         footer={formatAggregateProvider(aggregateProvider, resolvedProvider, t)}
       />
 
-      <section className="min-w-0 flex-1 bg-background/12">
+      <section className="min-w-0 flex-1 bg-background">
         <div className="mx-auto flex w-full max-w-[1600px] flex-col px-5 pt-6 pb-8 sm:px-8">
           <div className="max-w-[860px]">
             <h1 className="text-[22px] font-semibold tracking-normal text-foreground">

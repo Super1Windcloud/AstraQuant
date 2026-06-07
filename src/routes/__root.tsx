@@ -23,14 +23,14 @@ function AppShell() {
       <AppIconProvider>
         <I18nProvider>
           <MarketProviderStore>
-            <div className="flex h-screen w-screen flex-col bg-background/30">
+            <div className="flex h-screen w-screen flex-col bg-background">
               <WindowTitlebar />
               <div
                 style={{
                   scrollbarWidth: "none",
                 }}
                 className={cn(
-                  "flex-1 overflow-auto bg-background/15 pb-8",
+                  "flex-1 overflow-auto bg-background pb-8",
                   "scrollbar scrollbar-track-transparent scrollbar-thumb-accent scrollbar-thumb-rounded-md"
                 )}
               >
