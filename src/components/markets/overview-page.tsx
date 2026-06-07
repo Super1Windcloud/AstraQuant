@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router"
 import { RefreshCw } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { MarketSidebar } from "@/components/markets/sidebar"
 import { MarketTableSkeletonBody } from "@/components/markets/table-skeleton"
@@ -39,6 +39,17 @@ type OverviewKind = "indices" | MarketAsset
 type OverviewRow = IndexOverviewRow | AssetOverviewRow
 type OverviewCategory = IndexCategoryCount | AssetCategoryCount
 
+interface OverviewCacheEntry {
+  rows: OverviewRow[]
+  categories: OverviewCategory[]
+  tabs: MarketViewTab[]
+  updatedAt: string | null
+  sourceNote: string
+  resolvedProvider: MarketProvider | null
+  titleKey: string
+  descriptionKey: string
+}
+
 interface MarketOverviewPageProps {
   kind: OverviewKind
 }
@@ -71,12 +82,31 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
   )
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const overviewCacheRef = useRef(new Map<string, OverviewCacheEntry>())
+  const tabRowsCacheRef = useRef(new Map<string, OverviewRow[]>())
+
+  const cacheKey = `${kind}:${requestedProvider ?? "auto"}:${activeFilterId}:${reloadToken}`
+  const rowsCacheKey = `${cacheKey}:${selectedTab}`
 
   useEffect(() => {
     let ignore = false
-    void reloadToken
 
     async function load() {
+      const cached = overviewCacheRef.current.get(cacheKey)
+
+      if (cached) {
+        setRows(cached.rows)
+        setCategories(cached.categories)
+        setTabs(cached.tabs)
+        setUpdatedAt(cached.updatedAt)
+        setSourceNote(cached.sourceNote)
+        setResolvedProvider(cached.resolvedProvider)
+        setTitleKey(cached.titleKey)
+        setDescriptionKey(cached.descriptionKey)
+        setError(null)
+        return
+      }
+
       setIsLoading(true)
       setError(null)
 
@@ -88,6 +118,18 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
             return
           }
 
+          const nextEntry: OverviewCacheEntry = {
+            rows: overview.rows,
+            categories: overview.categories,
+            tabs: overview.tabs,
+            updatedAt: overview.updated_at,
+            sourceNote: overview.source_note,
+            resolvedProvider: overview.provider,
+            titleKey: overview.title_key,
+            descriptionKey: overview.description_key,
+          }
+
+          overviewCacheRef.current.set(cacheKey, nextEntry)
           setRows(overview.rows)
           setCategories(overview.categories)
           setTabs(overview.tabs)
@@ -113,6 +155,18 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
             return
           }
 
+          const nextEntry: OverviewCacheEntry = {
+            rows: overview.rows,
+            categories: overview.categories,
+            tabs: overview.tabs,
+            updatedAt: overview.updated_at,
+            sourceNote: overview.source_note,
+            resolvedProvider: overview.provider,
+            titleKey: assetConfig?.titleI18nKey ?? "stocksTitle",
+            descriptionKey: assetConfig?.descriptionI18nKey ?? "stocksDescription",
+          }
+
+          overviewCacheRef.current.set(cacheKey, nextEntry)
           setRows(overview.rows)
           setCategories(overview.categories)
           setTabs(overview.tabs)
@@ -160,9 +214,9 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
     activeFilterId,
     assetConfig?.descriptionI18nKey,
     assetConfig?.titleI18nKey,
-    effectiveProvider,
     kind,
     reloadToken,
+    cacheKey,
   ])
 
   const filterItems = useMemo(
@@ -173,7 +227,17 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
     [categories, t]
   )
 
-  const filteredRows = useMemo(() => sortRowsForTab(rows, selectedTab), [rows, selectedTab])
+  const filteredRows = useMemo(() => {
+    const cached = tabRowsCacheRef.current.get(rowsCacheKey)
+
+    if (cached) {
+      return cached
+    }
+
+    const nextRows = sortRowsForTab(rows, selectedTab)
+    tabRowsCacheRef.current.set(rowsCacheKey, nextRows)
+    return nextRows
+  }, [rows, rowsCacheKey, selectedTab])
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
 
   useEffect(() => {
