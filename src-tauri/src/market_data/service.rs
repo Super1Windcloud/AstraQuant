@@ -33,6 +33,7 @@ static SNAPSHOT_CACHE: OnceLock<Mutex<HashMap<String, CachedSnapshot>>> = OnceLo
 static ALPHA_RATE_LIMITER: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 static ALPHA_DAILY_LIMIT_REACHED: OnceLock<Mutex<bool>> = OnceLock::new();
 static FINNHUB_RATE_LIMIT_UNTIL: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+static FINNHUB_CANDLE_ACCESS_DENIED: OnceLock<Mutex<bool>> = OnceLock::new();
 
 #[derive(Clone)]
 struct CachedSnapshot {
@@ -348,7 +349,7 @@ fn get_market_chart_series_sync(
     } else {
         let asset = normalize_asset(&selected_kind)?;
         let provider = resolve_asset_provider(&asset, preferred_provider.as_deref())?;
-        let provider = maybe_fallback_asset_provider(&asset, provider);
+        let provider = maybe_fallback_chart_provider(&asset, provider);
         let definition = asset_definition_by_id(&asset, &item_id)
             .ok_or_else(|| format!("Unknown market chart item id: {item_id}"))?;
 
@@ -847,6 +848,15 @@ fn fetch_asset_chart_series(
                 Err(error)
             }
         }
+        Err(error) if provider == "finnhub" && is_finnhub_candle_access_message(&error) => {
+            mark_finnhub_candle_access_denied();
+
+            if let Some(series) = try_alpha_chart_series_fallback(client, asset, definition)? {
+                Ok(series)
+            } else {
+                Err(error)
+            }
+        }
         Err(error) if provider == "alpha-vantage" && is_alpha_daily_limit_message(&error) => {
             if let Some(series) = try_finnhub_chart_series_fallback(client, asset, definition)? {
                 Ok(series)
@@ -911,6 +921,10 @@ fn fetch_finnhub_candle_series(
         return Err("Finnhub rate limit is active. Please retry later.".to_string());
     }
 
+    if finnhub_candle_access_denied() {
+        return Err("Finnhub stock candle access is unavailable for current API key.".to_string());
+    }
+
     let token = env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"])?;
     let to = current_unix_timestamp();
     let from = to.saturating_sub(60 * 60 * 24 * 220);
@@ -928,6 +942,10 @@ fn fetch_finnhub_candle_series(
             Err(error) => {
                 if is_finnhub_rate_limit_message(&error) {
                     mark_finnhub_rate_limited(Duration::from_secs(60));
+                }
+
+                if is_finnhub_candle_access_message(&error) {
+                    mark_finnhub_candle_access_denied();
                 }
 
                 return Err(error);
@@ -1243,6 +1261,10 @@ fn finnhub_rate_limit_state() -> &'static Mutex<Option<Instant>> {
     FINNHUB_RATE_LIMIT_UNTIL.get_or_init(|| Mutex::new(None))
 }
 
+fn finnhub_candle_access_state() -> &'static Mutex<bool> {
+    FINNHUB_CANDLE_ACCESS_DENIED.get_or_init(|| Mutex::new(false))
+}
+
 fn alpha_daily_limit_reached() -> bool {
     alpha_daily_limit_state()
         .lock()
@@ -1274,6 +1296,19 @@ fn finnhub_rate_limit_active() -> bool {
 fn mark_finnhub_rate_limited(cooldown: Duration) {
     if let Ok(mut state) = finnhub_rate_limit_state().lock() {
         *state = Some(Instant::now() + cooldown);
+    }
+}
+
+fn finnhub_candle_access_denied() -> bool {
+    finnhub_candle_access_state()
+        .lock()
+        .map(|state| *state)
+        .unwrap_or(false)
+}
+
+fn mark_finnhub_candle_access_denied() {
+    if let Ok(mut state) = finnhub_candle_access_state().lock() {
+        *state = true;
     }
 }
 
@@ -1482,6 +1517,20 @@ fn maybe_fallback_asset_provider<'a>(asset: &str, provider: &'a str) -> &'a str 
 
     if provider == "finnhub"
         && finnhub_rate_limit_active()
+        && super::resolve::asset_supports_provider(asset, "alpha-vantage")
+        && has_configured_env_key(&["ALPHA_API_KEY"])
+    {
+        return "alpha-vantage";
+    }
+
+    provider
+}
+
+fn maybe_fallback_chart_provider<'a>(asset: &str, provider: &'a str) -> &'a str {
+    let provider = maybe_fallback_asset_provider(asset, provider);
+
+    if provider == "finnhub"
+        && finnhub_candle_access_denied()
         && super::resolve::asset_supports_provider(asset, "alpha-vantage")
         && has_configured_env_key(&["ALPHA_API_KEY"])
     {
@@ -1963,6 +2012,15 @@ fn is_finnhub_rate_limit_message(message: &str) -> bool {
             || normalized.contains("api limit reached")
             || normalized.contains("remaining limit: 0")
             || normalized.contains("rate limit"))
+}
+
+fn is_finnhub_candle_access_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    (normalized.contains("finnhub") || normalized.contains("stock_candle"))
+        && (normalized.contains("http 403")
+            || normalized.contains("403 forbidden")
+            || normalized.contains("you don't have access to this resource")
+            || normalized.contains("stock candle access is unavailable"))
 }
 
 fn sanitize_provider_message(message: &str) -> String {
