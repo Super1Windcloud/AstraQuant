@@ -37,7 +37,8 @@ pub fn run() {
             market_data::service::get_market_snapshot,
             market_data::service::get_indices_overview,
             market_data::service::get_asset_overview,
-            market_data::service::get_market_item_detail
+            market_data::service::get_market_item_detail,
+            market_data::service::get_market_chart_series
         ])
         .plugin(logging::build_log_plugin().skip_logger().build())
         .plugin(tauri_plugin_opener::init())

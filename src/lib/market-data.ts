@@ -540,6 +540,27 @@ export interface MarketItemDetailResponse {
   tradingview_symbol: string | null
 }
 
+export interface MarketChartPoint {
+  time: string
+  open: number | null
+  high: number | null
+  low: number | null
+  close: number | null
+  value: number | null
+}
+
+export interface MarketChartSeriesResponse {
+  provider: MarketProvider
+  kind: MarketKind
+  id: string
+  symbol: string
+  interval: string
+  series_type: "candlestick" | "area"
+  source_note: string
+  currency: string | null
+  points: MarketChartPoint[]
+}
+
 export interface AssetCategoryMeta {
   id: string
   i18nKey: string
@@ -1024,6 +1045,22 @@ export async function getMarketItemDetail(
   })
 }
 
+export async function getMarketChartSeries(
+  kind: MarketKind,
+  itemId: string,
+  preferredProvider?: MarketProvider
+) {
+  if (!isTauriRuntime()) {
+    return buildPreviewMarketChartSeries(kind, itemId)
+  }
+
+  return invoke<MarketChartSeriesResponse>("get_market_chart_series", {
+    kind,
+    itemId,
+    preferredProvider,
+  })
+}
+
 function buildPreviewAssetOverview(asset: MarketAsset): AssetOverviewResponse {
   const seeds = previewAssetSeeds[asset]
   const rows = seeds.map((seed, index) => buildPreviewAssetRow(asset, seed, index))
@@ -1121,6 +1158,29 @@ function buildPreviewMarketItemDetail(kind: MarketKind, itemId: string): MarketI
   }
 }
 
+function buildPreviewMarketChartSeries(
+  kind: MarketKind,
+  itemId: string
+): MarketChartSeriesResponse {
+  const detail = buildPreviewMarketItemDetail(kind, itemId)
+  const hash = `${kind}:${itemId}`.split("").reduce((total, char) => total + char.charCodeAt(0), 0)
+  const seedPrice = detail.price ?? detail.previous_close ?? 100
+  const seriesType = kind === "futures" ? "area" : "candlestick"
+  const points = buildPreviewChartPoints(seedPrice, hash, seriesType)
+
+  return {
+    provider: detail.provider,
+    kind,
+    id: itemId,
+    symbol: detail.symbol,
+    interval: "1D",
+    series_type: seriesType,
+    source_note: "Preview chart data for browser layout verification",
+    currency: detail.currency,
+    points,
+  }
+}
+
 function buildPreviewAssetRow(
   asset: MarketAsset,
   seed: AssetPreviewSeed,
@@ -1180,6 +1240,54 @@ function previewBaseValue(asset: MarketAsset, hash: number) {
 
 function roundMetric(value: number, digits: number) {
   return Number(value.toFixed(digits))
+}
+
+function buildPreviewChartPoints(
+  seedPrice: number,
+  hash: number,
+  seriesType: "candlestick" | "area"
+): MarketChartPoint[] {
+  const points: MarketChartPoint[] = []
+  const now = new Date()
+  let previousClose = Math.max(seedPrice * (1 - ((hash % 14) + 6) / 100), 0.1)
+
+  for (let index = 180; index >= 0; index -= 1) {
+    const date = new Date(now)
+    date.setDate(now.getDate() - index)
+    const time = date.toISOString().slice(0, 10)
+    const drift = Math.sin((hash + index) / 9) * 0.014 + (((hash + index * 11) % 9) - 4) / 320
+    const close = Math.max(previousClose * (1 + drift), 0.1)
+
+    if (seriesType === "area") {
+      points.push({
+        time,
+        open: null,
+        high: null,
+        low: null,
+        close: null,
+        value: roundMetric(close, 2),
+      })
+      previousClose = close
+      continue
+    }
+
+    const open = previousClose * (1 + (((hash + index * 5) % 7) - 3) / 500)
+    const high = Math.max(open, close) * (1 + ((hash + index) % 5) / 450)
+    const low = Math.min(open, close) * (1 - ((hash + index * 2) % 5) / 450)
+
+    points.push({
+      time,
+      open: roundMetric(open, 2),
+      high: roundMetric(high, 2),
+      low: roundMetric(low, 2),
+      close: roundMetric(close, 2),
+      value: null,
+    })
+
+    previousClose = close
+  }
+
+  return points
 }
 
 function previewTradingViewSymbol(kind: MarketKind, itemId: string) {

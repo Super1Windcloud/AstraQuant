@@ -1,13 +1,22 @@
 import { Link } from "@tanstack/react-router"
-import { ArrowLeft, RefreshCw } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { ArrowLeft, ChartCandlestick, RefreshCw } from "lucide-react"
+import { useEffect, useState } from "react"
 
+import { MarketPriceChart } from "@/components/markets/market-price-chart"
 import { MarketSidebar } from "@/components/markets/sidebar"
-import { TradingViewSymbolOverview } from "@/components/markets/tradingview-symbol-overview"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { type Locale, useI18n } from "@/lib/i18n"
 import {
+  getMarketChartSeries,
   getMarketItemDetail,
+  type MarketChartSeriesResponse,
   type MarketItemDetailResponse,
   type MarketKind,
   type MarketProvider,
@@ -28,8 +37,12 @@ export function MarketDetailPage({ itemId, kind }: MarketDetailPageProps) {
   const effectiveProvider = resolvePreferredProvider(kind, aggregateProvider)
   const [reloadToken, setReloadToken] = useState(0)
   const [detail, setDetail] = useState<MarketItemDetailResponse | null>(null)
+  const [chartSeries, setChartSeries] = useState<MarketChartSeriesResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isChartLoading, setIsChartLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [chartError, setChartError] = useState<string | null>(null)
+  const [isChartDialogOpen, setIsChartDialogOpen] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -37,24 +50,43 @@ export function MarketDetailPage({ itemId, kind }: MarketDetailPageProps) {
 
     async function load() {
       setIsLoading(true)
+      setIsChartLoading(true)
       setError(null)
+      setChartError(null)
+      setChartSeries(null)
 
-      try {
-        const response = await getMarketItemDetail(kind, itemId, effectiveProvider)
+      const [detailResult, chartResult] = await Promise.allSettled([
+        getMarketItemDetail(kind, itemId, effectiveProvider),
+        getMarketChartSeries(kind, itemId, effectiveProvider),
+      ])
 
-        if (!ignore) {
-          setDetail(response)
-        }
-      } catch (requestError) {
-        if (!ignore) {
-          setDetail(null)
-          setError(requestError instanceof Error ? requestError.message : String(requestError))
-        }
-      } finally {
-        if (!ignore) {
-          setIsLoading(false)
-        }
+      if (ignore) {
+        return
       }
+
+      if (detailResult.status === "fulfilled") {
+        setDetail(detailResult.value)
+      } else {
+        setDetail(null)
+        setError(
+          detailResult.reason instanceof Error
+            ? detailResult.reason.message
+            : String(detailResult.reason)
+        )
+      }
+
+      if (chartResult.status === "fulfilled" && chartResult.value.points.length > 0) {
+        setChartSeries(chartResult.value)
+      } else if (chartResult.status === "rejected") {
+        setChartError(
+          chartResult.reason instanceof Error
+            ? chartResult.reason.message
+            : String(chartResult.reason)
+        )
+      }
+
+      setIsLoading(false)
+      setIsChartLoading(false)
     }
 
     load()
@@ -71,8 +103,9 @@ export function MarketDetailPage({ itemId, kind }: MarketDetailPageProps) {
     detail?.provider ?? null,
     t
   )
-  const tradingViewLink = detail?.tradingview_symbol
-    ? `https://www.tradingview.com/symbols/${detail.tradingview_symbol.replace(":", "-").replace("!", "")}/`
+  const hasChartData = Boolean(chartSeries && chartSeries.points.length > 0)
+  const chartSourceLabel = chartSeries
+    ? `${getProviderLabel(chartSeries.provider)} · ${chartSeries.source_note}`
     : null
 
   return (
@@ -176,24 +209,47 @@ export function MarketDetailPage({ itemId, kind }: MarketDetailPageProps) {
               <div className="mt-6 rounded-xl border border-border/60 bg-background/72 px-4 py-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/58">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div className="text-sm font-medium text-foreground">{t("detailChartTitle")}</div>
-                  {tradingViewLink ? (
-                    <a
-                      href={tradingViewLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      TradingView
-                    </a>
-                  ) : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsChartDialogOpen(true)}
+                    disabled={!hasChartData}
+                    aria-label={t("detailChartOpen")}
+                    title={t("detailChartOpen")}
+                  >
+                    <ChartCandlestick className="size-4" />
+                  </Button>
                 </div>
 
-                {detail?.tradingview_symbol ? (
-                  <TradingViewSymbolOverview
-                    locale={locale}
-                    symbol={detail.tradingview_symbol}
-                    title={detail.symbol}
-                  />
+                {isChartLoading ? (
+                  <div className="flex h-[520px] items-center justify-center rounded-lg border border-dashed border-border/60 text-sm text-muted-foreground">
+                    {t("detailChartLoading")}
+                  </div>
+                ) : hasChartData && chartSeries ? (
+                  <>
+                    <MarketPriceChart
+                      data={chartSeries.points}
+                      locale={locale}
+                      seriesType={chartSeries.series_type}
+                    />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span>{chartSourceLabel}</span>
+                      <a
+                        href="https://www.tradingview.com/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="transition-colors hover:text-foreground"
+                      >
+                        {t("detailChartAttribution")}
+                      </a>
+                    </div>
+                  </>
+                ) : chartError ? (
+                  <div className="flex h-[520px] items-center justify-center rounded-lg border border-dashed border-border/60 px-6 text-center text-sm text-muted-foreground">
+                    {t("detailChartLoadFailed")}: {chartError}
+                  </div>
                 ) : (
                   <div className="flex h-[520px] items-center justify-center rounded-lg border border-dashed border-border/60 text-sm text-muted-foreground">
                     {t("detailChartUnavailable")}
@@ -222,6 +278,45 @@ export function MarketDetailPage({ itemId, kind }: MarketDetailPageProps) {
           </div>
         </div>
       </section>
+
+      <Dialog open={isChartDialogOpen} onOpenChange={setIsChartDialogOpen}>
+        <DialogContent className="max-w-[min(1200px,calc(100vw-2rem))] gap-0 p-0 sm:max-w-[min(1200px,calc(100vw-2rem))]">
+          <DialogHeader className="border-b border-border/60 px-5 py-4">
+            <DialogTitle>{detail?.name ?? detail?.symbol ?? itemId.toUpperCase()}</DialogTitle>
+            <DialogDescription>
+              {t("detailChartTitle")}
+              {chartSourceLabel ? ` · ${chartSourceLabel}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {chartSeries ? (
+            <div className="px-4 pt-4 pb-4">
+              <MarketPriceChart
+                className="rounded-md border-border/60"
+                data={chartSeries.points}
+                height={720}
+                locale={locale}
+                seriesType={chartSeries.series_type}
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
+                <span>{chartSourceLabel}</span>
+                <a
+                  href="https://www.tradingview.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="transition-colors hover:text-foreground"
+                >
+                  {t("detailChartAttribution")}
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="px-5 py-10 text-sm text-muted-foreground">
+              {t("detailChartUnavailable")}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }
@@ -324,4 +419,8 @@ function formatAggregateProvider(
   }
 
   return providerLabels[effectiveProvider ?? aggregateProvider]
+}
+
+function getProviderLabel(provider: MarketProvider) {
+  return providerLabels[provider] ?? provider
 }

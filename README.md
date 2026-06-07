@@ -2,8 +2,6 @@
 
 AstraQuant is a next-generation market intelligence desktop terminal built with Tauri, React, TypeScript, Vite, and shadcn/ui. It focuses on multi-asset quotes, provider switching, and a clean foundation for charting and trading workflows.
 
-![Dashboard Preview](./images/image.png)
-
 ## Features
 
 - Cross-platform desktop packaging with [Tauri](https://tauri.app/) for Windows, macOS, and Linux
@@ -52,22 +50,22 @@ pnpm tb
 
 ## Scripts
 
-| Command | Description |
-| --- | --- |
-| `pnpm dev` | Start the Vite development server |
-| `pnpm build` | Build the frontend bundle |
-| `pnpm preview` | Preview the production frontend build |
-| `pnpm td` | Run Tauri in development mode |
-| `pnpm tb` | Build the Tauri desktop app |
-| `pnpm lint` | Run Biome checks and `cargo check` |
-| `pnpm format` | Format frontend and Rust code |
-| `pnpm test` | Run Vitest |
-| `pnpm shadcn` | Add shadcn/ui components |
-| `pnpm icon` | Generate multi-size app icons from `app-icon.png` |
-| `pnpm taze` | Upgrade frontend dependencies |
-| `pnpm cargo-update` | Upgrade Rust dependencies |
-| `pnpm bump` | Run frontend, Rust, and shadcn updates together |
-| `pnpm clean` | Remove frontend build artifacts and Cargo output |
+| Command             | Description                                       |
+| ------------------- | ------------------------------------------------- |
+| `pnpm dev`          | Start the Vite development server                 |
+| `pnpm build`        | Build the frontend bundle                         |
+| `pnpm preview`      | Preview the production frontend build             |
+| `pnpm td`           | Run Tauri in development mode                     |
+| `pnpm tb`           | Build the Tauri desktop app                       |
+| `pnpm lint`         | Run Biome checks and `cargo check`                |
+| `pnpm format`       | Format frontend and Rust code                     |
+| `pnpm test`         | Run Vitest                                        |
+| `pnpm shadcn`       | Add shadcn/ui components                          |
+| `pnpm icon`         | Generate multi-size app icons from `app-icon.png` |
+| `pnpm taze`         | Upgrade frontend dependencies                     |
+| `pnpm cargo-update` | Upgrade Rust dependencies                         |
+| `pnpm bump`         | Run frontend, Rust, and shadcn updates together   |
+| `pnpm clean`        | Remove frontend build artifacts and Cargo output  |
 
 ## Tech Stack
 
