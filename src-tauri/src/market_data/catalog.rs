@@ -1,9 +1,5 @@
 use super::models::IndexCategoryCount;
 
-pub(crate) struct ProviderSymbols {
-    pub(crate) finnhub: Option<&'static str>,
-}
-
 pub(crate) struct IndexDefinition {
     pub(crate) id: &'static str,
     pub(crate) code: &'static str,
@@ -11,7 +7,7 @@ pub(crate) struct IndexDefinition {
     pub(crate) region: &'static str,
     pub(crate) currency: &'static str,
     pub(crate) categories: &'static [&'static str],
-    pub(crate) symbols: ProviderSymbols,
+    pub(crate) finnhub_symbol: Option<&'static str>,
 }
 
 pub(crate) const INDEX_CATEGORY_IDS: &[&str] = &[
@@ -36,9 +32,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "major", "us", "americas"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^GSPC"),
-        },
+        finnhub_symbol: Some("^GSPC"),
     },
     IndexDefinition {
         id: "ixic",
@@ -47,9 +41,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "major", "us", "americas"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^IXIC"),
-        },
+        finnhub_symbol: Some("^IXIC"),
     },
     IndexDefinition {
         id: "dji",
@@ -58,9 +50,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "major", "us", "americas"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^DJI"),
-        },
+        finnhub_symbol: Some("^DJI"),
     },
     IndexDefinition {
         id: "vix",
@@ -69,9 +59,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "major", "us", "americas"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^VIX"),
-        },
+        finnhub_symbol: Some("^VIX"),
     },
     IndexDefinition {
         id: "tsx",
@@ -80,9 +68,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Canada",
         currency: "CAD",
         categories: &["all", "major", "americas"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^GSPTSE"),
-        },
+        finnhub_symbol: Some("^GSPTSE"),
     },
     IndexDefinition {
         id: "ukx",
@@ -91,9 +77,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United Kingdom",
         currency: "GBP",
         categories: &["all", "major", "europe"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^FTSE"),
-        },
+        finnhub_symbol: Some("^FTSE"),
     },
     IndexDefinition {
         id: "dax",
@@ -102,9 +86,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Germany",
         currency: "EUR",
         categories: &["all", "major", "europe"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^GDAXI"),
-        },
+        finnhub_symbol: Some("^GDAXI"),
     },
     IndexDefinition {
         id: "px1",
@@ -113,9 +95,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "France",
         currency: "EUR",
         categories: &["all", "major", "europe"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^FCHI"),
-        },
+        finnhub_symbol: Some("^FCHI"),
     },
     IndexDefinition {
         id: "ftmib",
@@ -124,9 +104,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Italy",
         currency: "EUR",
         categories: &["all", "major", "europe"],
-        symbols: ProviderSymbols {
-            finnhub: Some("FTSEMIB.MI"),
-        },
+        finnhub_symbol: Some("FTSEMIB.MI"),
     },
     IndexDefinition {
         id: "n225",
@@ -135,9 +113,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Japan",
         currency: "JPY",
         categories: &["all", "major", "asia", "pacific"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^N225"),
-        },
+        finnhub_symbol: Some("^N225"),
     },
     IndexDefinition {
         id: "kospi",
@@ -146,9 +122,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "South Korea",
         currency: "KRW",
         categories: &["all", "major", "asia"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^KS11"),
-        },
+        finnhub_symbol: Some("^KS11"),
     },
     IndexDefinition {
         id: "hsi",
@@ -157,9 +131,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Hong Kong",
         currency: "HKD",
         categories: &["all", "asia"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^HSI"),
-        },
+        finnhub_symbol: Some("^HSI"),
     },
     IndexDefinition {
         id: "xjo",
@@ -168,9 +140,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Australia",
         currency: "AUD",
         categories: &["all", "pacific"],
-        symbols: ProviderSymbols {
-            finnhub: Some("^AXJO"),
-        },
+        finnhub_symbol: Some("^AXJO"),
     },
     IndexDefinition {
         id: "nz50",
@@ -179,9 +149,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "New Zealand",
         currency: "NZD",
         categories: &["all", "pacific"],
-        symbols: ProviderSymbols {
-            finnhub: None,
-        },
+        finnhub_symbol: None,
     },
     IndexDefinition {
         id: "ta35",
@@ -190,9 +158,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Israel",
         currency: "ILS",
         categories: &["all", "middle-east"],
-        symbols: ProviderSymbols {
-            finnhub: None,
-        },
+        finnhub_symbol: None,
     },
     IndexDefinition {
         id: "jalsh",
@@ -201,9 +167,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "South Africa",
         currency: "ZAR",
         categories: &["all", "africa"],
-        symbols: ProviderSymbols {
-            finnhub: None,
-        },
+        finnhub_symbol: None,
     },
     IndexDefinition {
         id: "dxy",
@@ -212,9 +176,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "Global",
         currency: "USD",
         categories: &["all", "currency", "americas"],
-        symbols: ProviderSymbols {
-            finnhub: Some("DX-Y.NYB"),
-        },
+        finnhub_symbol: Some("DX-Y.NYB"),
     },
     IndexDefinition {
         id: "xlb",
@@ -223,9 +185,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLB"),
-        },
+        finnhub_symbol: Some("XLB"),
     },
     IndexDefinition {
         id: "xle",
@@ -234,9 +194,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLE"),
-        },
+        finnhub_symbol: Some("XLE"),
     },
     IndexDefinition {
         id: "xlf",
@@ -245,9 +203,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLF"),
-        },
+        finnhub_symbol: Some("XLF"),
     },
     IndexDefinition {
         id: "xlk",
@@ -256,9 +212,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLK"),
-        },
+        finnhub_symbol: Some("XLK"),
     },
     IndexDefinition {
         id: "xlv",
@@ -267,9 +221,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLV"),
-        },
+        finnhub_symbol: Some("XLV"),
     },
     IndexDefinition {
         id: "xli",
@@ -278,9 +230,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLI"),
-        },
+        finnhub_symbol: Some("XLI"),
     },
     IndexDefinition {
         id: "xlp",
@@ -289,9 +239,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLP"),
-        },
+        finnhub_symbol: Some("XLP"),
     },
     IndexDefinition {
         id: "xly",
@@ -300,9 +248,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLY"),
-        },
+        finnhub_symbol: Some("XLY"),
     },
     IndexDefinition {
         id: "xlu",
@@ -311,9 +257,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLU"),
-        },
+        finnhub_symbol: Some("XLU"),
     },
     IndexDefinition {
         id: "xlc",
@@ -322,9 +266,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLC"),
-        },
+        finnhub_symbol: Some("XLC"),
     },
     IndexDefinition {
         id: "xlre",
@@ -333,9 +275,7 @@ pub(crate) const INDEX_DEFINITIONS: &[IndexDefinition] = &[
         region: "United States",
         currency: "USD",
         categories: &["all", "sp-sectors", "us"],
-        symbols: ProviderSymbols {
-            finnhub: Some("XLRE"),
-        },
+        finnhub_symbol: Some("XLRE"),
     },
 ];
 
@@ -357,5 +297,5 @@ pub(crate) fn category_counts() -> Vec<IndexCategoryCount> {
 }
 
 pub(crate) fn finnhub_symbol(definition: &IndexDefinition) -> Option<&'static str> {
-    definition.symbols.finnhub
+    definition.finnhub_symbol
 }

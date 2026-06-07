@@ -63,19 +63,3 @@ pub(crate) struct FinnhubQuote {
     pub(crate) pc: Option<f64>,
     pub(crate) t: Option<i64>,
 }
-
-#[derive(Debug, Deserialize, Clone)]
-pub(crate) struct TwelveQuote {
-    pub(crate) symbol: Option<String>,
-    pub(crate) currency: Option<String>,
-    pub(crate) close: Option<String>,
-    pub(crate) open: Option<String>,
-    pub(crate) high: Option<String>,
-    pub(crate) low: Option<String>,
-    pub(crate) previous_close: Option<String>,
-    pub(crate) change: Option<String>,
-    pub(crate) percent_change: Option<String>,
-    pub(crate) volume: Option<String>,
-    pub(crate) datetime: Option<String>,
-    pub(crate) message: Option<String>,
-}
