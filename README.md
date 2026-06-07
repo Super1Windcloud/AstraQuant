@@ -1,17 +1,39 @@
 # AstraQuant
 
-AstraQuant is a next-generation market intelligence desktop terminal built with Tauri, React, TypeScript, Vite, and shadcn/ui. It focuses on multi-asset quotes, provider switching, and a clean foundation for charting and trading workflows.
+Desktop market intelligence, rebuilt for speed.
 
-## Features
+AstraQuant is a cross-platform trading and market-monitoring terminal built with Tauri, React, TypeScript, and Rust. It is designed for fast scanning, multi-asset navigation, provider switching, and chart-centric workflows without the weight of a browser-only stack.
 
-- Cross-platform desktop packaging with [Tauri](https://tauri.app/) for Windows, macOS, and Linux
+## Why AstraQuant
+
+Most market tools either feel like a web page stretched into a desktop window or a legacy terminal frozen in time. AstraQuant aims for a middle ground:
+
+- fast desktop delivery with a native shell
+- a modern, data-dense interface for active market observation
+- flexible provider routing for different asset views
+- a clean base for deeper charting, research, and execution workflows
+
+## Demo
+
+Overview screen with market sections, watchlist-style navigation, and a dense terminal layout:
+
+![AstraQuant demo overview](./images/demo1.png)
+
+Detail workspace with price context, instrument stats, and integrated chart views:
+
+![AstraQuant market workspace](./images/demo2.png)
+
+## Highlights
+
+- Multi-asset market views covering indices, stocks, crypto, futures, and ETFs
+- Provider switching with support for aggregated market data and TradingView-driven flows
+- Detail pages with snapshot metrics, native chart rendering, and TradingView advanced chart integration
+- Desktop packaging with [Tauri](https://tauri.app/) for Windows, macOS, and Linux
 - React 19 + TypeScript frontend powered by [Vite](https://vitejs.dev/)
-- UI primitives from [shadcn/ui](https://ui.shadcn.com/) and [Radix UI](https://www.radix-ui.com/)
-- File-based routing with [TanStack Router](https://tanstack.com/router)
-- Market terminal layout with quote search, provider switching, and snapshot panels
-- Theme support with light and dark modes
-- Preconfigured developer tooling with Biome, Husky, Vitest, and Cargo
-- Utility scripts for dependency maintenance and icon generation
+- UI foundations built with [shadcn/ui](https://ui.shadcn.com/), [Radix UI](https://www.radix-ui.com/), and Tailwind CSS v4
+- File-based routing via [TanStack Router](https://tanstack.com/router)
+- Multiple theme modes, including light, dark, dim, ocean, and avocado
+- Development tooling with Biome, Husky, Vitest, and Cargo
 
 ## Quick Start
 
@@ -73,6 +95,7 @@ pnpm tb
 - Frontend: React 19 + TypeScript
 - Routing: TanStack Router
 - UI: shadcn/ui + Radix UI + Tailwind CSS v4
+- Charts: Lightweight Charts + TradingView embed
 - Testing: Vitest
 - Formatting and linting: Biome
 - Package manager: pnpm
@@ -83,25 +106,25 @@ pnpm tb
 ```text
 astraquant/
 ├── public/              # Static assets
-├── scripts/             # Utility scripts
+├── scripts/             # Utility scripts and TradingView bridge helpers
 ├── src/                 # React application
-│   ├── components/      # Shared UI and app components
+│   ├── components/      # Shared UI and market components
 │   ├── dashboard/       # Dashboard layouts and feature blocks
-│   ├── lib/             # Utilities and helpers
+│   ├── lib/             # Utilities, i18n, and market metadata
 │   ├── routes/          # File-based route entries
 │   └── styles/          # Global styles
 ├── src-tauri/           # Tauri and Rust source
 │   ├── capabilities/    # Tauri capability config
 │   ├── icons/           # Generated app icons
-│   └── src/             # Rust entry points
-└── images/              # Repository images
+│   └── src/             # Native commands and market data services
+└── images/              # README demo images
 ```
 
 ## Development Notes
 
 ### Add a page
 
-Create a new route file inside `src/routes/`. The TanStack Router plugin will generate the route tree during development and build.
+Create a new route file inside `src/routes/`. The TanStack Router plugin generates the route tree during development and build.
 
 ### Add a UI component
 
@@ -109,11 +132,11 @@ Create a new route file inside `src/routes/`. The TanStack Router plugin will ge
 pnpm shadcn add button
 ```
 
-You can also copy and adapt components directly from the shadcn/ui catalog if you want tighter control over implementation details.
+You can also copy and adapt components directly from the shadcn/ui catalog when tighter control is more useful than scaffolding.
 
 ### Customize theming
 
-Theme handling lives in `src/components/theme-provider.tsx`, and the color tokens are defined in `src/styles/globals.css`.
+Theme handling lives in `src/components/theme-provider.tsx`, and the design tokens are defined in `src/styles/globals.css`.
 
 ### Update dependencies
 
