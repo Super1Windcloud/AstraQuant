@@ -48,6 +48,7 @@ interface OverviewCacheEntry {
 }
 
 const overviewCache = new Map<string, OverviewCacheEntry>()
+const overviewInFlight = new Map<string, Promise<OverviewCacheEntry>>()
 
 interface MarketOverviewPageProps {
   kind: OverviewKind
@@ -104,67 +105,40 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
       setError(null)
 
       try {
-        if (kind === "indices") {
-          const overview = await getIndicesOverview(activeFilterId, requestedProvider)
-
-          if (ignore) {
-            return
-          }
-
-          const nextEntry: OverviewCacheEntry = {
-            rows: overview.rows,
-            categories: overview.categories,
-            updatedAt: overview.updated_at,
-            sourceNote: overview.source_note,
-            resolvedProvider: overview.provider,
-            titleKey: overview.title_key,
-            descriptionKey: overview.description_key,
-          }
-
-          overviewCache.set(cacheKey, nextEntry)
-          setRows(overview.rows)
-          setCategories(overview.categories)
-          setUpdatedAt(overview.updated_at)
-          setSourceNote(overview.source_note)
-          setResolvedProvider(overview.provider)
-          setTitleKey(overview.title_key)
-          setDescriptionKey(overview.description_key)
-          setActiveFilterId((current) =>
-            current === "all" || overview.categories.some((item) => item.id === current)
-              ? current
-              : "all"
+        const inFlight = overviewInFlight.get(cacheKey)
+        const request =
+          inFlight ??
+          createOverviewRequest(
+            cacheKey,
+            kind,
+            activeFilterId,
+            requestedProvider,
+            assetConfig?.titleI18nKey ?? "stocksTitle",
+            assetConfig?.descriptionI18nKey ?? "stocksDescription"
           )
-        } else {
-          const overview = await getAssetOverview(kind, requestedProvider, activeFilterId)
 
-          if (ignore) {
-            return
-          }
-
-          const nextEntry: OverviewCacheEntry = {
-            rows: overview.rows,
-            categories: overview.categories,
-            updatedAt: overview.updated_at,
-            sourceNote: overview.source_note,
-            resolvedProvider: overview.provider,
-            titleKey: assetConfig?.titleI18nKey ?? "stocksTitle",
-            descriptionKey: assetConfig?.descriptionI18nKey ?? "stocksDescription",
-          }
-
-          overviewCache.set(cacheKey, nextEntry)
-          setRows(overview.rows)
-          setCategories(overview.categories)
-          setUpdatedAt(overview.updated_at)
-          setSourceNote(overview.source_note)
-          setResolvedProvider(overview.provider)
-          setTitleKey(assetConfig?.titleI18nKey ?? "stocksTitle")
-          setDescriptionKey(assetConfig?.descriptionI18nKey ?? "stocksDescription")
-          setActiveFilterId((current) =>
-            current === "all" || overview.categories.some((item) => item.id === current)
-              ? current
-              : "all"
-          )
+        if (!inFlight) {
+          overviewInFlight.set(cacheKey, request)
         }
+
+        const nextEntry = await request
+
+        if (ignore) {
+          return
+        }
+
+        setRows(nextEntry.rows)
+        setCategories(nextEntry.categories)
+        setUpdatedAt(nextEntry.updatedAt)
+        setSourceNote(nextEntry.sourceNote)
+        setResolvedProvider(nextEntry.resolvedProvider)
+        setTitleKey(nextEntry.titleKey)
+        setDescriptionKey(nextEntry.descriptionKey)
+        setActiveFilterId((current) =>
+          current === "all" || nextEntry.categories.some((item) => item.id === current)
+            ? current
+            : "all"
+        )
       } catch (requestError) {
         if (ignore) {
           return
@@ -597,4 +571,45 @@ function formatAggregateProvider(
   }
 
   return `${label}: ${selectedLabel} -> ${effectiveLabel} -> ${resolvedLabel}`
+}
+
+async function createOverviewRequest(
+  cacheKey: string,
+  kind: OverviewKind,
+  activeFilterId: string,
+  requestedProvider: MarketProvider | undefined,
+  assetTitleKey: string,
+  assetDescriptionKey: string
+) {
+  try {
+    if (kind === "indices") {
+      const overview = await getIndicesOverview(activeFilterId, requestedProvider)
+      const nextEntry: OverviewCacheEntry = {
+        rows: overview.rows,
+        categories: overview.categories,
+        updatedAt: overview.updated_at,
+        sourceNote: overview.source_note,
+        resolvedProvider: overview.provider,
+        titleKey: overview.title_key,
+        descriptionKey: overview.description_key,
+      }
+      overviewCache.set(cacheKey, nextEntry)
+      return nextEntry
+    }
+
+    const overview = await getAssetOverview(kind, requestedProvider, activeFilterId)
+    const nextEntry: OverviewCacheEntry = {
+      rows: overview.rows,
+      categories: overview.categories,
+      updatedAt: overview.updated_at,
+      sourceNote: overview.source_note,
+      resolvedProvider: overview.provider,
+      titleKey: assetTitleKey,
+      descriptionKey: assetDescriptionKey,
+    }
+    overviewCache.set(cacheKey, nextEntry)
+    return nextEntry
+  } finally {
+    overviewInFlight.delete(cacheKey)
+  }
 }
