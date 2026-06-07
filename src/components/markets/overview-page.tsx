@@ -17,9 +17,12 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n } from "@/lib/i18n"
 import {
+  getAssetOverview,
+  getIndicesOverview,
   type AssetCategoryCount,
   type AssetOverviewRow,
-  getAssetOverview,
+  type IndexCategoryCount,
+  type IndexOverviewRow,
   type MarketAsset,
   type MarketProvider,
   type MarketViewTab,
@@ -30,25 +33,42 @@ import {
 import { useMarketProviderStore } from "@/lib/market-provider"
 import { cn } from "@/lib/utils"
 
+const pageSize = 100
+
+type OverviewKind = "indices" | MarketAsset
+type OverviewRow = IndexOverviewRow | AssetOverviewRow
+type OverviewCategory = IndexCategoryCount | AssetCategoryCount
+
 interface MarketOverviewPageProps {
-  asset: MarketAsset
+  kind: OverviewKind
 }
 
-export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
-  const config = marketAssetConfigs[asset]
+export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
   const { t, locale } = useI18n()
   const { aggregateProvider } = useMarketProviderStore()
-  const effectiveProvider = resolvePreferredProvider(asset, aggregateProvider)
+  const selectedProvider = aggregateProvider === "auto" ? "finnhub" : (aggregateProvider ?? "finnhub")
+  const requestedProvider = aggregateProvider === "auto" ? undefined : aggregateProvider
+  const effectiveProvider = resolvePreferredProvider(kind, selectedProvider) ?? selectedProvider
   const navigate = useNavigate()
+  const assetConfig = kind === "indices" ? null : marketAssetConfigs[kind]
   const [selectedTab, setSelectedTab] = useState("overview")
-  const [activeCategoryId, setActiveCategoryId] = useState("")
+  const [activeFilterId, setActiveFilterId] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
   const [reloadToken, setReloadToken] = useState(0)
-  const [rows, setRows] = useState<AssetOverviewRow[]>([])
-  const [categories, setCategories] = useState<AssetCategoryCount[]>([])
+  const [rows, setRows] = useState<OverviewRow[]>([])
+  const [categories, setCategories] = useState<OverviewCategory[]>([])
   const [tabs, setTabs] = useState<MarketViewTab[]>([])
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [sourceNote, setSourceNote] = useState("")
   const [resolvedProvider, setResolvedProvider] = useState<MarketProvider | null>(null)
+  const [titleKey, setTitleKey] = useState(
+    kind === "indices" ? "indicesTitle" : (assetConfig?.titleI18nKey ?? "stocksTitle")
+  )
+  const [descriptionKey, setDescriptionKey] = useState(
+    kind === "indices"
+      ? "indicesDescription"
+      : (assetConfig?.descriptionI18nKey ?? "stocksDescription")
+  )
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,28 +81,57 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
       setError(null)
 
       try {
-        const overview = await getAssetOverview(asset, effectiveProvider)
+        if (kind === "indices") {
+          const overview = await getIndicesOverview(activeFilterId, requestedProvider)
 
-        if (ignore) {
-          return
+          if (ignore) {
+            return
+          }
+
+          setRows(overview.rows)
+          setCategories(overview.categories)
+          setTabs(overview.tabs)
+          setUpdatedAt(overview.updated_at)
+          setSourceNote(overview.source_note)
+          setResolvedProvider(overview.provider)
+          setTitleKey(overview.title_key)
+          setDescriptionKey(overview.description_key)
+          setActiveFilterId((current) =>
+            current === "all" || overview.categories.some((item) => item.id === current)
+              ? current
+              : "all"
+          )
+          setSelectedTab((current) =>
+            overview.tabs.some((item) => item.id === current)
+              ? current
+              : (overview.tabs[0]?.id ?? "overview")
+          )
+        } else {
+          const overview = await getAssetOverview(kind, requestedProvider, activeFilterId)
+
+          if (ignore) {
+            return
+          }
+
+          setRows(overview.rows)
+          setCategories(overview.categories)
+          setTabs(overview.tabs)
+          setUpdatedAt(overview.updated_at)
+          setSourceNote(overview.source_note)
+          setResolvedProvider(overview.provider)
+          setTitleKey(assetConfig?.titleI18nKey ?? "stocksTitle")
+          setDescriptionKey(assetConfig?.descriptionI18nKey ?? "stocksDescription")
+          setActiveFilterId((current) =>
+            current === "all" || overview.categories.some((item) => item.id === current)
+              ? current
+              : "all"
+          )
+          setSelectedTab((current) =>
+            overview.tabs.some((item) => item.id === current)
+              ? current
+              : (overview.tabs[0]?.id ?? "overview")
+          )
         }
-
-        setRows(overview.rows)
-        setCategories(overview.categories)
-        setTabs(overview.tabs)
-        setUpdatedAt(overview.updated_at)
-        setSourceNote(overview.source_note)
-        setResolvedProvider(overview.provider)
-        setActiveCategoryId((current) =>
-          overview.categories.some((item) => item.id === current)
-            ? current
-            : (overview.categories[0]?.id ?? "")
-        )
-        setSelectedTab((current) =>
-          overview.tabs.some((item) => item.id === current)
-            ? current
-            : (overview.tabs[0]?.id ?? "overview")
-        )
       } catch (requestError) {
         if (ignore) {
           return
@@ -107,32 +156,48 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
     return () => {
       ignore = true
     }
-  }, [effectiveProvider, asset, reloadToken])
+  }, [
+    activeFilterId,
+    assetConfig?.descriptionI18nKey,
+    assetConfig?.titleI18nKey,
+    effectiveProvider,
+    kind,
+    reloadToken,
+  ])
 
-  const sections = useMemo(() => {
-    return categories.map((category) => ({
-      ...category,
-      rows: sortRowsForTab(
-        rows.filter((row) => row.category_id === category.id),
-        selectedTab
-      ),
-    }))
-  }, [categories, rows, selectedTab])
+  const filterItems = useMemo(
+    () => [
+      { id: "all", label: t("filterAll") },
+      ...categories.map((item) => ({ id: item.id, label: t(item.label_key as never) })),
+    ],
+    [categories, t]
+  )
+
+  const filteredRows = useMemo(() => sortRowsForTab(rows, selectedTab), [rows, selectedTab])
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeFilterId, selectedTab, kind])
+
+  const pagedRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredRows.slice(startIndex, startIndex + pageSize)
+  }, [currentPage, filteredRows])
+
   const isInitialLoading = isLoading && rows.length === 0
-
-  function scrollToCategory(categoryId: string) {
-    setActiveCategoryId(categoryId)
-    document.getElementById(`market-section-${categoryId}`)?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    })
-  }
 
   function openDetail(itemId: string) {
     void navigate({
       to: "/market/$kind/$itemId",
       params: {
-        kind: asset,
+        kind,
         itemId,
       },
     })
@@ -141,43 +206,48 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
   return (
     <main className="flex h-full min-h-0 overflow-hidden bg-background text-foreground">
       <MarketSidebar
-        footer={formatAggregateProvider(aggregateProvider, effectiveProvider, resolvedProvider, t)}
+        footer={formatAggregateProvider(
+          selectedProvider,
+          effectiveProvider,
+          resolvedProvider,
+          t as (key: string) => string
+        )}
       />
 
       <section className="min-w-0 flex-1 overflow-hidden bg-background">
         <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-col px-5 pt-6 pb-6 sm:px-8">
-          <div className="shrink-0 flex flex-wrap gap-2">
-            {categories.map((category) => {
-              const isActive = activeCategoryId === category.id
+          <div className="max-w-[920px] shrink-0">
+            <h1 className="text-[22px] font-semibold tracking-normal text-foreground">
+              {t(titleKey as never)}
+            </h1>
+            <p className="mt-3 text-[15px] leading-8 text-foreground/80">
+              {t(descriptionKey as never)}
+            </p>
+          </div>
+
+          <div className="mt-6 shrink-0 flex flex-wrap gap-2 border-b border-border/60 pb-4">
+            {filterItems.map((item) => {
+              const isActive = activeFilterId === item.id
 
               return (
                 <button
                   type="button"
-                  key={category.id}
-                  onClick={() => scrollToCategory(category.id)}
+                  key={item.id}
+                  onClick={() => setActiveFilterId(item.id)}
                   className={cn(
-                    "inline-flex h-8 items-center rounded-full border px-3 text-[13px] backdrop-blur-md transition-colors",
+                    "inline-flex h-8 items-center rounded-md border px-3 text-[13px] transition-colors",
                     isActive
-                      ? "border-primary/35 bg-background/72 text-foreground"
-                      : "border-border/60 bg-background/50 text-muted-foreground hover:bg-accent/35 hover:text-foreground"
+                      ? "border-foreground/18 bg-accent text-foreground"
+                      : "border-border/70 bg-background text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {t(category.label_key as never)}
+                  {item.label}
                 </button>
               )
             })}
           </div>
 
-          <div className="mt-7 max-w-[860px] shrink-0">
-            <h1 className="text-[22px] font-semibold tracking-normal text-foreground">
-              {t(config.titleI18nKey as never)}
-            </h1>
-            <p className="mt-3 text-[15px] leading-8 text-foreground/80">
-              {t(config.descriptionI18nKey as never)}
-            </p>
-          </div>
-
-          <div className="mt-8 flex shrink-0 items-center justify-between gap-4 border-b border-border/60">
+          <div className="mt-4 flex shrink-0 items-center justify-between gap-4 border-b border-border/60">
             <Tabs value={selectedTab} onValueChange={setSelectedTab} className="gap-0">
               <TabsList variant="line" className="h-11 gap-5 p-0 text-muted-foreground">
                 {tabs.map((tab) => (
@@ -196,10 +266,10 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
               <div className="hidden text-right text-xs text-muted-foreground md:block">
                 <div>
                   {formatAggregateProvider(
-                    aggregateProvider,
+                    selectedProvider,
                     effectiveProvider,
                     resolvedProvider,
-                    t
+                    t as (key: string) => string
                   )}
                 </div>
                 <div>{updatedAt ?? sourceNote}</div>
@@ -208,7 +278,7 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                className="border-border/60 bg-background/68 text-foreground backdrop-blur-md hover:bg-accent/50 hover:text-foreground"
+                className="border-border/60 bg-background text-foreground hover:bg-accent/50 hover:text-foreground"
                 onClick={() => setReloadToken((value) => value + 1)}
                 disabled={isLoading}
                 aria-label={t("marketsRefresh")}
@@ -225,181 +295,148 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
           ) : null}
 
           <ScrollArea className={cn("min-h-0 flex-1", error ? "mt-4" : "mt-6")}>
-            <div className="pb-2 pr-3">
-              {isInitialLoading ? (
-                <section className="overflow-hidden rounded-xl border border-border/60 bg-background/72 backdrop-blur-xl supports-[backdrop-filter]:bg-background/58">
-                  <Table className="min-w-[1180px]">
-                    <TableHeader>
-                      <TableRow className="border-border/60 hover:bg-transparent">
-                        <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
-                          <div className="pl-4">
-                            <div>{t("indicesTableSymbol")}</div>
-                            <div className="mt-1">--</div>
-                          </div>
-                        </TableHead>
-                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                          {t("indicesTablePrice")}
-                        </TableHead>
-                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                          {t("indicesTableChangePct")}
-                        </TableHead>
-                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                          {t("indicesTableChange")}
-                        </TableHead>
-                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                          {t("indicesTableHigh")}
-                        </TableHead>
-                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                          {t("indicesTableLow")}
-                        </TableHead>
-                        <TableHead className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
-                          {t("indicesTableTechRating")}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <MarketTableSkeletonBody rowCount={8} />
-                  </Table>
-                </section>
-              ) : (
-                sections.map((section, index) => (
-                  <section
-                    key={section.id}
-                    id={`market-section-${section.id}`}
-                    className={cn(index === 0 ? "" : "mt-8")}
-                  >
-                    <div className="mb-3 flex items-end justify-between gap-4">
-                      <div>
-                        <h2 className="text-[18px] font-semibold text-foreground">
-                          {t(section.label_key as never)}
-                        </h2>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {section.total} {t("indicesTableSymbol")}
+            <div className="pb-4 pr-3">
+              <section className="overflow-hidden rounded-lg border border-border/70 bg-background">
+                <Table className="min-w-[1180px]">
+                  <TableHeader>
+                    <TableRow className="border-border/70 hover:bg-transparent">
+                      <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
+                        <div className="pl-4">
+                          <div>{t("indicesTableSymbol")}</div>
+                          <div className="mt-1">{filteredRows.length}</div>
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="overflow-hidden rounded-xl border border-border/60 bg-background/72 backdrop-blur-xl supports-[backdrop-filter]:bg-background/58">
-                      <Table className="min-w-[1180px]">
-                        <TableHeader>
-                          <TableRow className="border-border/60 hover:bg-transparent">
-                            <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
-                              <div className="pl-4">
-                                <div>{t("indicesTableSymbol")}</div>
-                                <div className="mt-1">{section.total}</div>
-                              </div>
-                            </TableHead>
-                            <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                              {t("indicesTablePrice")}
-                            </TableHead>
-                            <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                              {t("indicesTableChangePct")}
-                            </TableHead>
-                            <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                              {t("indicesTableChange")}
-                            </TableHead>
-                            <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                              {t("indicesTableHigh")}
-                            </TableHead>
-                            <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                              {t("indicesTableLow")}
-                            </TableHead>
-                            <TableHead className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
-                              {t("indicesTableTechRating")}
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {section.rows.length === 0 ? (
-                            <TableRow className="border-border/50 hover:bg-transparent">
-                              <TableCell
-                                colSpan={7}
-                                className="px-4 py-8 text-center text-sm text-muted-foreground"
-                              >
-                                {t("marketsNoData")}
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            section.rows.map((row) => (
-                              <TableRow
-                                key={row.id}
-                                className="cursor-pointer border-border/50 text-[14px] hover:bg-accent/25"
-                                onClick={() => openDetail(row.id)}
-                              >
-                                <TableCell className="px-0 py-0">
-                                  <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
-                                    <AssetBadge symbol={row.symbol} />
-                                    <div className="min-w-0 py-3">
-                                      <div className="flex items-center gap-3">
-                                        <span className="rounded bg-accent/50 px-2 py-1 text-[12px] leading-none text-foreground">
-                                          {row.symbol}
-                                        </span>
-                                        <span className="truncate text-foreground">{row.name}</span>
-                                      </div>
-                                    </div>
+                      </TableHead>
+                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                        {t("indicesTablePrice")}
+                      </TableHead>
+                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                        {t("indicesTableChangePct")}
+                      </TableHead>
+                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                        {t("indicesTableChange")}
+                      </TableHead>
+                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                        {t("indicesTableHigh")}
+                      </TableHead>
+                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                        {t("indicesTableLow")}
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
+                        {t("indicesTableTechRating")}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  {isInitialLoading ? (
+                    <MarketTableSkeletonBody rowCount={8} />
+                  ) : (
+                    <TableBody>
+                      {pagedRows.length === 0 ? (
+                        <TableRow className="border-border/50 hover:bg-transparent">
+                          <TableCell
+                            colSpan={7}
+                            className="px-4 py-8 text-center text-sm text-muted-foreground"
+                          >
+                            {t("marketsNoData")}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        pagedRows.map((row) => (
+                          <TableRow
+                            key={row.id}
+                            className="cursor-pointer border-border/50 text-[14px] hover:bg-accent/25"
+                            onClick={() => openDetail(row.id)}
+                          >
+                            <TableCell className="px-0 py-0">
+                              <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
+                                <AssetBadge symbol={row.symbol} />
+                                <div className="min-w-0 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="rounded bg-accent/50 px-2 py-1 text-[12px] leading-none text-foreground">
+                                      {row.symbol}
+                                    </span>
+                                    <span className="truncate text-foreground">{row.name}</span>
                                   </div>
-                                </TableCell>
-                                <TableCell className="px-3 py-3 text-right text-foreground">
-                                  {formatMarketValue(row.price, locale, 2)}
-                                  {row.currency ? (
-                                    <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-                                      {row.currency}
-                                    </span>
-                                  ) : null}
-                                </TableCell>
-                                <TableCell
-                                  className={cn(
-                                    "px-3 py-3 text-right",
-                                    getSignedColorClass(row.change_percent)
-                                  )}
-                                >
-                                  {formatPercent(row.change_percent, locale)}
-                                </TableCell>
-                                <TableCell
-                                  className={cn(
-                                    "px-3 py-3 text-right",
-                                    getSignedColorClass(row.change)
-                                  )}
-                                >
-                                  {formatSignedValue(row.change, locale, 2)}
-                                  {row.currency ? (
-                                    <span className="ml-1 text-[10px] uppercase opacity-80">
-                                      {row.currency}
-                                    </span>
-                                  ) : null}
-                                </TableCell>
-                                <TableCell className="px-3 py-3 text-right text-foreground">
-                                  {formatMarketValue(row.high, locale, 2)}
-                                </TableCell>
-                                <TableCell className="px-3 py-3 text-right text-foreground">
-                                  {formatMarketValue(row.low, locale, 2)}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 text-right">
-                                  <span
-                                    className={cn(
-                                      "text-[14px]",
-                                      getRatingClass(row.technical_rating)
-                                    )}
-                                  >
-                                    {row.technical_rating}
-                                  </span>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </section>
-                ))
-              )}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-3 py-3 text-right text-foreground">
+                              {formatMarketValue(row.price, locale, 2)}
+                              {row.currency ? (
+                                <span className="ml-1 text-[10px] uppercase text-muted-foreground">
+                                  {row.currency}
+                                </span>
+                              ) : null}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                "px-3 py-3 text-right",
+                                getSignedColorClass(row.change_percent)
+                              )}
+                            >
+                              {formatPercent(row.change_percent, locale)}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                "px-3 py-3 text-right",
+                                getSignedColorClass(row.change)
+                              )}
+                            >
+                              {formatSignedValue(row.change, locale, 2)}
+                              {row.currency ? (
+                                <span className="ml-1 text-[10px] uppercase opacity-80">
+                                  {row.currency}
+                                </span>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="px-3 py-3 text-right text-foreground">
+                              {formatMarketValue(row.high, locale, 2)}
+                            </TableCell>
+                            <TableCell className="px-3 py-3 text-right text-foreground">
+                              {formatMarketValue(row.low, locale, 2)}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-right">
+                              <span
+                                className={cn("text-[14px]", getRatingClass(row.technical_rating))}
+                              >
+                                {row.technical_rating}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  )}
+                </Table>
+              </section>
 
-              <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-                <div>
-                  {rows.length} {t("indicesTableSymbol")}
+              <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-xs text-muted-foreground">
+                <div className="justify-self-start">
+                  {filteredRows.length === 0
+                    ? "0-0 / 0"
+                    : `${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, filteredRows.length)} / ${filteredRows.length}`}
                 </div>
-                <div className="text-right">
-                  <div>{sourceNote || t("marketsPreviewSource")}</div>
-                  {updatedAt ? <div className="mt-1">{updatedAt}</div> : null}
+                <div className="min-w-20 text-center">
+                  {t("paginationPage")} {currentPage} / {totalPages}
+                </div>
+                <div className="flex items-center justify-self-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((value) => Math.max(1, value - 1))}
+                  >
+                    {t("paginationPrevious")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))}
+                  >
+                    {t("paginationNext")}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -438,7 +475,7 @@ function AssetBadge({ symbol }: { symbol: string }) {
   )
 }
 
-function sortRowsForTab(rows: AssetOverviewRow[], tab: string) {
+function sortRowsForTab(rows: OverviewRow[], tab: string) {
   const next = [...rows]
 
   if (tab === "performance") {
@@ -472,12 +509,11 @@ function formatMarketValue(
 
   const abs = Math.abs(value)
   const digits = abs >= 1000 ? 2 : abs >= 100 ? 2 : abs >= 1 ? 2 : 4
-  const formatted = new Intl.NumberFormat(locale, {
+
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: Math.max(maximumFractionDigits, digits),
   }).format(value)
-
-  return formatted
 }
 
 function formatSignedValue(
@@ -490,7 +526,6 @@ function formatSignedValue(
   }
 
   const formatted = formatMarketValue(Math.abs(value), locale, maximumFractionDigits)
-
   return `${value > 0 ? "+" : value < 0 ? "-" : ""}${formatted}`
 }
 
@@ -567,20 +602,23 @@ function technicalWeight(value: string) {
 }
 
 function formatAggregateProvider(
-  aggregateProvider: "auto" | MarketProvider,
-  effectiveProvider: MarketProvider | undefined,
+  aggregateProvider: string,
+  effectiveProvider: string,
   resolvedProvider: MarketProvider | null,
-  t: ReturnType<typeof useI18n>["t"]
+  t: (key: string) => string
 ) {
-  if (aggregateProvider === "auto") {
-    return resolvedProvider
-      ? `${t("aggregateProviderAuto")} · ${providerLabels[resolvedProvider]}`
-      : t("aggregateProviderAuto")
+  const selectedLabel = providerLabels[aggregateProvider as MarketProvider] ?? aggregateProvider
+  const effectiveLabel = providerLabels[effectiveProvider as MarketProvider] ?? effectiveProvider
+
+  if (!resolvedProvider) {
+    return `${t("marketsProvider")}: ${selectedLabel}`
   }
 
-  if (effectiveProvider && effectiveProvider !== aggregateProvider) {
-    return `${providerLabels[aggregateProvider]} -> ${providerLabels[effectiveProvider]}`
+  const resolvedLabel = providerLabels[resolvedProvider] ?? resolvedProvider
+
+  if (aggregateProvider === effectiveProvider) {
+    return `${t("marketsProvider")}: ${resolvedLabel}`
   }
 
-  return providerLabels[effectiveProvider ?? aggregateProvider]
+  return `${t("marketsProvider")}: ${selectedLabel} -> ${effectiveLabel} -> ${resolvedLabel}`
 }

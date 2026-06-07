@@ -7,5 +7,5 @@ export const Route = createFileRoute("/stocks")({
 })
 
 function StocksPage() {
-  return <MarketOverviewPage asset="stocks" />
+  return <MarketOverviewPage kind="stocks" />
 }

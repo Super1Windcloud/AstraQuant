@@ -7,5 +7,5 @@ export const Route = createFileRoute("/crypto")({
 })
 
 function CryptoPage() {
-  return <MarketOverviewPage asset="crypto" />
+  return <MarketOverviewPage kind="crypto" />
 }
