@@ -21,6 +21,7 @@ import {
   type IndexCategoryCount,
   type IndexOverviewRow,
   type MarketProvider,
+  type MarketTableColumn,
   type MarketViewTab,
   providerLabels,
 } from "@/lib/market-data"
@@ -43,6 +44,9 @@ function IndicesPage() {
   const [rows, setRows] = useState<IndexOverviewRow[]>([])
   const [categories, setCategories] = useState<IndexCategoryCount[]>([])
   const [tabs, setTabs] = useState<MarketViewTab[]>([])
+  const [columns, setColumns] = useState<MarketTableColumn[]>([])
+  const [titleKey, setTitleKey] = useState("indicesTitle")
+  const [descriptionKey, setDescriptionKey] = useState("indicesDescription")
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [sourceNote, setSourceNote] = useState("")
   const [resolvedProvider, setResolvedProvider] = useState<MarketProvider | null>(null)
@@ -73,6 +77,9 @@ function IndicesPage() {
         setResolvedProvider(overview.provider)
         setCategories(overview.categories)
         setTabs(overview.tabs)
+        setColumns(overview.columns)
+        setTitleKey(overview.title_key)
+        setDescriptionKey(overview.description_key)
         setSelectedCategory((current) =>
           overview.categories.some((item) => item.id === current)
             ? current
@@ -91,6 +98,9 @@ function IndicesPage() {
         setRows([])
         setCategories([])
         setTabs([])
+        setColumns([])
+        setTitleKey("indicesTitle")
+        setDescriptionKey("indicesDescription")
         setUpdatedAt(null)
         setSourceNote("")
         setResolvedProvider(null)
@@ -143,8 +153,9 @@ function IndicesPage() {
 
   const countLabel = useMemo(() => {
     const total = categoryCounts[selectedCategory] ?? 0
-    return `${t("indicesTableSymbol")} ${total}`
-  }, [categoryCounts, selectedCategory, t])
+    const symbolColumn = columns.find((column) => column.id === "symbol")
+    return `${t((symbolColumn?.label_key ?? "indicesTableSymbol") as never)} ${total}`
+  }, [categoryCounts, columns, selectedCategory, t])
   const isInitialLoading = isLoading && rows.length === 0
 
   function openDetail(itemId: string) {
@@ -187,10 +198,10 @@ function IndicesPage() {
 
           <div className="mt-7 max-w-[760px] shrink-0">
             <h1 className="text-[22px] font-semibold tracking-normal text-foreground">
-              {t("indicesTitle")}
+              {t(titleKey as never)}
             </h1>
             <p className="mt-3 text-[15px] leading-8 text-foreground/80">
-              {t("indicesDescription")}
+              {t(descriptionKey as never)}
             </p>
           </div>
 
@@ -240,30 +251,29 @@ function IndicesPage() {
                 <Table className="min-w-[1180px]">
                   <TableHeader>
                     <TableRow className="border-border/60 hover:bg-transparent">
-                      <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
-                        <div className="pl-4">
-                          <div>{t("indicesTableSymbol")}</div>
-                          <div className="mt-1">{categoryCounts[selectedCategory] ?? 0}</div>
-                        </div>
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTablePrice")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableChangePct")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableChange")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableHigh")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableLow")}
-                      </TableHead>
-                      <TableHead className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableTechRating")}
-                      </TableHead>
+                      {columns.map((column) =>
+                        column.id === "symbol" ? (
+                          <TableHead
+                            key={column.id}
+                            className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground"
+                          >
+                            <div className="pl-4">
+                              <div>{t(column.label_key as never)}</div>
+                              <div className="mt-1">{categoryCounts[selectedCategory] ?? 0}</div>
+                            </div>
+                          </TableHead>
+                        ) : (
+                          <TableHead
+                            key={column.id}
+                            className={cn(
+                              "px-3 py-3 text-xs font-medium text-muted-foreground",
+                              column.align === "right" ? "text-right" : "text-left"
+                            )}
+                          >
+                            {t(column.label_key as never)}
+                          </TableHead>
+                        )
+                      )}
                     </TableRow>
                   </TableHeader>
                   {isInitialLoading ? (
@@ -273,7 +283,7 @@ function IndicesPage() {
                       {displayRows.length === 0 ? (
                         <TableRow className="border-border/50 hover:bg-transparent">
                           <TableCell
-                            colSpan={7}
+                            colSpan={Math.max(columns.length, 1)}
                             className="px-4 py-8 text-center text-sm text-muted-foreground"
                           >
                             {t("indicesNoData")}
@@ -286,61 +296,7 @@ function IndicesPage() {
                             className="cursor-pointer border-border/50 text-[14px] hover:bg-accent/25"
                             onClick={() => openDetail(row.id)}
                           >
-                            <TableCell className="px-0 py-0">
-                              <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
-                                <IndexBadge symbol={row.symbol} />
-                                <div className="min-w-0 py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="rounded bg-accent/50 px-2 py-1 text-[12px] leading-none text-foreground">
-                                      {row.symbol}
-                                    </span>
-                                    <span className="truncate text-foreground">{row.name}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-3 py-3 text-right text-foreground">
-                              {formatMarketValue(row.price, locale, 2)}
-                              {row.currency ? (
-                                <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-                                  {row.currency}
-                                </span>
-                              ) : null}
-                            </TableCell>
-                            <TableCell
-                              className={cn(
-                                "px-3 py-3 text-right",
-                                getSignedColorClass(row.change_percent)
-                              )}
-                            >
-                              {formatPercent(row.change_percent, locale)}
-                            </TableCell>
-                            <TableCell
-                              className={cn(
-                                "px-3 py-3 text-right",
-                                getSignedColorClass(row.change)
-                              )}
-                            >
-                              {formatSignedValue(row.change, locale, 2)}
-                              {row.currency ? (
-                                <span className="ml-1 text-[10px] uppercase opacity-80">
-                                  {row.currency}
-                                </span>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="px-3 py-3 text-right text-foreground">
-                              {formatMarketValue(row.high, locale, 2)}
-                            </TableCell>
-                            <TableCell className="px-3 py-3 text-right text-foreground">
-                              {formatMarketValue(row.low, locale, 2)}
-                            </TableCell>
-                            <TableCell className="px-4 py-3 text-right">
-                              <span
-                                className={cn("text-[14px]", getRatingClass(row.technical_rating))}
-                              >
-                                {row.technical_rating}
-                              </span>
-                            </TableCell>
+                            {columns.map((column) => renderIndexCell(row, column, locale))}
                           </TableRow>
                         ))
                       )}
@@ -389,6 +345,94 @@ function IndexBadge({ symbol }: { symbol: string }) {
         {symbol.slice(0, 2)}
       </div>
     </div>
+  )
+}
+
+function renderIndexCell(row: IndexOverviewRow, column: MarketTableColumn, locale: string) {
+  if (column.id === "symbol") {
+    return (
+      <TableCell key={column.id} className="px-0 py-0">
+        <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
+          <IndexBadge symbol={row.symbol} />
+          <div className="min-w-0 py-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded bg-accent/50 px-2 py-1 text-[12px] leading-none text-foreground">
+                {row.symbol}
+              </span>
+              <span className="truncate text-foreground">{row.name}</span>
+            </div>
+          </div>
+        </div>
+      </TableCell>
+    )
+  }
+
+  if (column.id === "price") {
+    return (
+      <TableCell key={column.id} className="px-3 py-3 text-right text-foreground">
+        {formatMarketValue(row.price, locale, 2)}
+        {row.currency ? (
+          <span className="ml-1 text-[10px] uppercase text-muted-foreground">{row.currency}</span>
+        ) : null}
+      </TableCell>
+    )
+  }
+
+  if (column.id === "change_percent") {
+    return (
+      <TableCell
+        key={column.id}
+        className={cn("px-3 py-3 text-right", getSignedColorClass(row.change_percent))}
+      >
+        {formatPercent(row.change_percent, locale)}
+      </TableCell>
+    )
+  }
+
+  if (column.id === "change") {
+    return (
+      <TableCell
+        key={column.id}
+        className={cn("px-3 py-3 text-right", getSignedColorClass(row.change))}
+      >
+        {formatSignedValue(row.change, locale, 2)}
+        {row.currency ? (
+          <span className="ml-1 text-[10px] uppercase opacity-80">{row.currency}</span>
+        ) : null}
+      </TableCell>
+    )
+  }
+
+  if (column.id === "high") {
+    return (
+      <TableCell key={column.id} className="px-3 py-3 text-right text-foreground">
+        {formatMarketValue(row.high, locale, 2)}
+      </TableCell>
+    )
+  }
+
+  if (column.id === "low") {
+    return (
+      <TableCell key={column.id} className="px-3 py-3 text-right text-foreground">
+        {formatMarketValue(row.low, locale, 2)}
+      </TableCell>
+    )
+  }
+
+  if (column.id === "technical_rating") {
+    return (
+      <TableCell key={column.id} className="px-4 py-3 text-right">
+        <span className={cn("text-[14px]", getRatingClass(row.technical_rating))}>
+          {row.technical_rating}
+        </span>
+      </TableCell>
+    )
+  }
+
+  return (
+    <TableCell key={column.id} className="px-3 py-3 text-right text-muted-foreground">
+      --
+    </TableCell>
   )
 }
 

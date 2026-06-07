@@ -39,6 +39,13 @@ pub(crate) struct MarketViewTab {
 }
 
 #[derive(Debug, Serialize)]
+pub(crate) struct MarketTableColumn {
+    pub(crate) id: String,
+    pub(crate) label_key: String,
+    pub(crate) align: String,
+}
+
+#[derive(Debug, Serialize)]
 pub(crate) struct IndexOverviewRow {
     pub(crate) id: String,
     pub(crate) symbol: String,
@@ -60,10 +67,13 @@ pub(crate) struct IndexOverviewRow {
 pub(crate) struct IndicesOverviewResponse {
     pub(crate) provider: String,
     pub(crate) category: String,
+    pub(crate) title_key: String,
+    pub(crate) description_key: String,
     pub(crate) updated_at: Option<String>,
     pub(crate) source_note: String,
     pub(crate) categories: Vec<IndexCategoryCount>,
     pub(crate) tabs: Vec<MarketViewTab>,
+    pub(crate) columns: Vec<MarketTableColumn>,
     pub(crate) rows: Vec<IndexOverviewRow>,
 }
 

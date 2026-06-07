@@ -10,7 +10,8 @@ use super::catalog::{
 };
 use super::models::{
     AssetOverviewResponse, AssetOverviewRow, FinnhubQuote, IndexOverviewRow,
-    IndicesOverviewResponse, MarketItemDetailResponse, MarketSnapshot, MarketViewTab,
+    IndicesOverviewResponse, MarketItemDetailResponse, MarketSnapshot, MarketTableColumn,
+    MarketViewTab,
 };
 use log::{debug, error, info, warn};
 use serde_json::{Map, Value};
@@ -147,10 +148,13 @@ fn get_indices_overview_sync(
     let response = IndicesOverviewResponse {
         provider: provider.to_string(),
         category: selected_category,
+        title_key: "indicesTitle".to_string(),
+        description_key: "indicesDescription".to_string(),
         updated_at,
         source_note,
         categories: category_counts(),
         tabs: default_market_tabs(),
+        columns: default_index_columns(),
         rows,
     };
 
@@ -619,6 +623,46 @@ fn default_market_tabs() -> Vec<MarketViewTab> {
         MarketViewTab {
             id: "technicals".to_string(),
             label_key: "indicesTabTechnicals".to_string(),
+        },
+    ]
+}
+
+fn default_index_columns() -> Vec<MarketTableColumn> {
+    vec![
+        MarketTableColumn {
+            id: "symbol".to_string(),
+            label_key: "indicesTableSymbol".to_string(),
+            align: "left".to_string(),
+        },
+        MarketTableColumn {
+            id: "price".to_string(),
+            label_key: "indicesTablePrice".to_string(),
+            align: "right".to_string(),
+        },
+        MarketTableColumn {
+            id: "change_percent".to_string(),
+            label_key: "indicesTableChangePct".to_string(),
+            align: "right".to_string(),
+        },
+        MarketTableColumn {
+            id: "change".to_string(),
+            label_key: "indicesTableChange".to_string(),
+            align: "right".to_string(),
+        },
+        MarketTableColumn {
+            id: "high".to_string(),
+            label_key: "indicesTableHigh".to_string(),
+            align: "right".to_string(),
+        },
+        MarketTableColumn {
+            id: "low".to_string(),
+            label_key: "indicesTableLow".to_string(),
+            align: "right".to_string(),
+        },
+        MarketTableColumn {
+            id: "technical_rating".to_string(),
+            label_key: "indicesTableTechRating".to_string(),
+            align: "right".to_string(),
         },
     ]
 }

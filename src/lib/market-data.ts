@@ -29,6 +29,12 @@ export interface MarketViewTab {
   label_key: string
 }
 
+export interface MarketTableColumn {
+  id: string
+  label_key: string
+  align: "left" | "right"
+}
+
 export interface IndexOverviewRow {
   id: string
   symbol: string
@@ -49,10 +55,13 @@ export interface IndexOverviewRow {
 export interface IndicesOverviewResponse {
   provider: MarketProvider
   category: string
+  title_key: string
+  description_key: string
   updated_at: string | null
   source_note: string
   categories: IndexCategoryCount[]
   tabs: MarketViewTab[]
+  columns: MarketTableColumn[]
   rows: IndexOverviewRow[]
 }
 
@@ -417,6 +426,16 @@ const defaultPreviewTabs: MarketViewTab[] = [
   { id: "technicals", label_key: "indicesTabTechnicals" },
 ]
 
+const defaultPreviewIndexColumns: MarketTableColumn[] = [
+  { id: "symbol", label_key: "indicesTableSymbol", align: "left" },
+  { id: "price", label_key: "indicesTablePrice", align: "right" },
+  { id: "change_percent", label_key: "indicesTableChangePct", align: "right" },
+  { id: "change", label_key: "indicesTableChange", align: "right" },
+  { id: "high", label_key: "indicesTableHigh", align: "right" },
+  { id: "low", label_key: "indicesTableLow", align: "right" },
+  { id: "technical_rating", label_key: "indicesTableTechRating", align: "right" },
+]
+
 export async function getIndicesOverview(category: string, preferredProvider?: MarketProvider) {
   if (!isTauriRuntime()) {
     return buildPreviewIndicesOverview(category)
@@ -443,10 +462,13 @@ function buildPreviewIndicesOverview(category: string): IndicesOverviewResponse 
   return {
     provider: "finnhub",
     category: normalizedCategory,
+    title_key: "indicesTitle",
+    description_key: "indicesDescription",
     updated_at: rows[0]?.as_of ?? null,
     source_note: "Preview data for browser layout verification",
     categories: previewCategoryCounts,
     tabs: defaultPreviewTabs,
+    columns: defaultPreviewIndexColumns,
     rows,
   }
 }
