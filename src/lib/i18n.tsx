@@ -38,7 +38,6 @@ const messages = {
     assetIndex: "指数",
     assetEtf: "ETF",
     assetCrypto: "加密货币",
-    assetForex: "外汇",
     assetFuture: "期货",
     indicesTitle: "All indices in one place",
     indicesDescription:
@@ -93,13 +92,6 @@ const messages = {
     cryptoSectionSmartContracts: "Smart-contract layer",
     cryptoSectionPaymentsMeme: "Payments and meme",
     cryptoSectionInfrastructure: "Infrastructure",
-    forexTitle: "All FX pairs in one place",
-    forexDescription:
-      "Follow the major pairs, dollar bloc, Asia pairs, and key crosses from top to bottom with the same market terminal layout.",
-    forexSectionMajors: "Major pairs",
-    forexSectionDollarBloc: "Dollar bloc",
-    forexSectionAsia: "Asia",
-    forexSectionCrosses: "Crosses",
     futuresTitle: "All futures proxies in one place",
     futuresDescription:
       "Monitor energy, metals, grains, and soft commodities in a single stacked page. Alpha Vantage daily commodity series are used where available.",
@@ -142,7 +134,6 @@ const messages = {
     assetIndex: "Indices",
     assetEtf: "ETF",
     assetCrypto: "Crypto",
-    assetForex: "Forex",
     assetFuture: "Futures",
     indicesTitle: "All indices in one place",
     indicesDescription:
@@ -197,13 +188,6 @@ const messages = {
     cryptoSectionSmartContracts: "Smart-contract layer",
     cryptoSectionPaymentsMeme: "Payments and meme",
     cryptoSectionInfrastructure: "Infrastructure",
-    forexTitle: "All FX pairs in one place",
-    forexDescription:
-      "Follow the major pairs, dollar bloc, Asia pairs, and key crosses from top to bottom with the same market terminal layout.",
-    forexSectionMajors: "Major pairs",
-    forexSectionDollarBloc: "Dollar bloc",
-    forexSectionAsia: "Asia",
-    forexSectionCrosses: "Crosses",
     futuresTitle: "All futures proxies in one place",
     futuresDescription:
       "Monitor energy, metals, grains, and soft commodities in a single stacked page. Alpha Vantage daily commodity series are used where available.",

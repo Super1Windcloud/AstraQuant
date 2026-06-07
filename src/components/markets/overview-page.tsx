@@ -2,6 +2,7 @@ import { RefreshCw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { MarketSidebar } from "@/components/markets/sidebar"
+import { MarketTableSkeletonBody } from "@/components/markets/table-skeleton"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -104,6 +105,7 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
       ),
     }))
   }, [config.categories, rows, selectedTab])
+  const isInitialLoading = isLoading && rows.length === 0
 
   return (
     <main className="flex min-h-full bg-[#16181a] text-[#f2f2f2]">
@@ -217,78 +219,85 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
                       </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
-                    {section.rows.length === 0 ? (
-                      <TableRow className="border-[#2f3338] hover:bg-transparent">
-                        <TableCell
-                          colSpan={7}
-                          className="px-4 py-8 text-center text-sm text-[#98a0a8]"
-                        >
-                          {isLoading ? t("waitingForData") : t("marketsNoData")}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      section.rows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          className="border-[#2f3338] text-[14px] hover:bg-[#202428]/80"
-                        >
-                          <TableCell className="px-0 py-0">
-                            <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
-                              <AssetBadge symbol={row.symbol} />
-                              <div className="min-w-0 py-3">
-                                <div className="flex items-center gap-3">
-                                  <span className="rounded bg-[#25292d] px-2 py-1 text-[12px] leading-none text-[#f0f3f5]">
-                                    {row.symbol}
-                                  </span>
-                                  <span className="truncate text-[#f2f4f6]">{row.name}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right text-[#eff3f6]">
-                            {formatMarketValue(row.price, locale, asset === "forex" ? 4 : 2)}
-                            {row.currency ? (
-                              <span className="ml-1 text-[10px] uppercase text-[#a0a7ae]">
-                                {row.currency}
-                              </span>
-                            ) : null}
-                          </TableCell>
+                  {isInitialLoading ? (
+                    <MarketTableSkeletonBody rowCount={3} />
+                  ) : (
+                    <TableBody>
+                      {section.rows.length === 0 ? (
+                        <TableRow className="border-[#2f3338] hover:bg-transparent">
                           <TableCell
-                            className={cn(
-                              "px-3 py-3 text-right",
-                              getSignedColorClass(row.change_percent)
-                            )}
+                            colSpan={7}
+                            className="px-4 py-8 text-center text-sm text-[#98a0a8]"
                           >
-                            {formatPercent(row.change_percent, locale)}
-                          </TableCell>
-                          <TableCell
-                            className={cn("px-3 py-3 text-right", getSignedColorClass(row.change))}
-                          >
-                            {formatSignedValue(row.change, locale, asset === "forex" ? 4 : 2)}
-                            {row.currency ? (
-                              <span className="ml-1 text-[10px] uppercase opacity-80">
-                                {row.currency}
-                              </span>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right text-[#edf1f4]">
-                            {formatMarketValue(row.high, locale, asset === "forex" ? 4 : 2)}
-                          </TableCell>
-                          <TableCell className="px-3 py-3 text-right text-[#edf1f4]">
-                            {formatMarketValue(row.low, locale, asset === "forex" ? 4 : 2)}
-                          </TableCell>
-                          <TableCell className="px-4 py-3 text-right">
-                            <span
-                              className={cn("text-[14px]", getRatingClass(row.technical_rating))}
-                            >
-                              {row.technical_rating}
-                            </span>
+                            {t("marketsNoData")}
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
+                      ) : (
+                        section.rows.map((row) => (
+                          <TableRow
+                            key={row.id}
+                            className="border-[#2f3338] text-[14px] hover:bg-[#202428]/80"
+                          >
+                            <TableCell className="px-0 py-0">
+                              <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
+                                <AssetBadge symbol={row.symbol} />
+                                <div className="min-w-0 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="rounded bg-[#25292d] px-2 py-1 text-[12px] leading-none text-[#f0f3f5]">
+                                      {row.symbol}
+                                    </span>
+                                    <span className="truncate text-[#f2f4f6]">{row.name}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-3 py-3 text-right text-[#eff3f6]">
+                              {formatMarketValue(row.price, locale, 2)}
+                              {row.currency ? (
+                                <span className="ml-1 text-[10px] uppercase text-[#a0a7ae]">
+                                  {row.currency}
+                                </span>
+                              ) : null}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                "px-3 py-3 text-right",
+                                getSignedColorClass(row.change_percent)
+                              )}
+                            >
+                              {formatPercent(row.change_percent, locale)}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                "px-3 py-3 text-right",
+                                getSignedColorClass(row.change)
+                              )}
+                            >
+                              {formatSignedValue(row.change, locale, 2)}
+                              {row.currency ? (
+                                <span className="ml-1 text-[10px] uppercase opacity-80">
+                                  {row.currency}
+                                </span>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="px-3 py-3 text-right text-[#edf1f4]">
+                              {formatMarketValue(row.high, locale, 2)}
+                            </TableCell>
+                            <TableCell className="px-3 py-3 text-right text-[#edf1f4]">
+                              {formatMarketValue(row.low, locale, 2)}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-right">
+                              <span
+                                className={cn("text-[14px]", getRatingClass(row.technical_rating))}
+                              >
+                                {row.technical_rating}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  )}
                 </Table>
               </div>
             </section>

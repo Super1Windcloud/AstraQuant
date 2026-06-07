@@ -13,7 +13,6 @@ import { Route as StocksRouteImport } from './routes/stocks'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as FuturesRouteImport } from './routes/futures'
-import { Route as ForexRouteImport } from './routes/forex'
 import { Route as EtfRouteImport } from './routes/etf'
 import { Route as CustomRouteImport } from './routes/custom'
 import { Route as CryptoRouteImport } from './routes/crypto'
@@ -38,11 +37,6 @@ const ProductsRoute = ProductsRouteImport.update({
 const FuturesRoute = FuturesRouteImport.update({
   id: '/futures',
   path: '/futures',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForexRoute = ForexRouteImport.update({
-  id: '/forex',
-  path: '/forex',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EtfRoute = EtfRouteImport.update({
@@ -76,7 +70,6 @@ export interface FileRoutesByFullPath {
   '/crypto': typeof CryptoRoute
   '/custom': typeof CustomRoute
   '/etf': typeof EtfRoute
-  '/forex': typeof ForexRoute
   '/futures': typeof FuturesRoute
   '/products': typeof ProductsRoute
   '/settings': typeof SettingsRoute
@@ -88,7 +81,6 @@ export interface FileRoutesByTo {
   '/crypto': typeof CryptoRoute
   '/custom': typeof CustomRoute
   '/etf': typeof EtfRoute
-  '/forex': typeof ForexRoute
   '/futures': typeof FuturesRoute
   '/products': typeof ProductsRoute
   '/settings': typeof SettingsRoute
@@ -101,7 +93,6 @@ export interface FileRoutesById {
   '/crypto': typeof CryptoRoute
   '/custom': typeof CustomRoute
   '/etf': typeof EtfRoute
-  '/forex': typeof ForexRoute
   '/futures': typeof FuturesRoute
   '/products': typeof ProductsRoute
   '/settings': typeof SettingsRoute
@@ -115,7 +106,6 @@ export interface FileRouteTypes {
     | '/crypto'
     | '/custom'
     | '/etf'
-    | '/forex'
     | '/futures'
     | '/products'
     | '/settings'
@@ -127,7 +117,6 @@ export interface FileRouteTypes {
     | '/crypto'
     | '/custom'
     | '/etf'
-    | '/forex'
     | '/futures'
     | '/products'
     | '/settings'
@@ -139,7 +128,6 @@ export interface FileRouteTypes {
     | '/crypto'
     | '/custom'
     | '/etf'
-    | '/forex'
     | '/futures'
     | '/products'
     | '/settings'
@@ -152,7 +140,6 @@ export interface RootRouteChildren {
   CryptoRoute: typeof CryptoRoute
   CustomRoute: typeof CustomRoute
   EtfRoute: typeof EtfRoute
-  ForexRoute: typeof ForexRoute
   FuturesRoute: typeof FuturesRoute
   ProductsRoute: typeof ProductsRoute
   SettingsRoute: typeof SettingsRoute
@@ -188,13 +175,6 @@ declare module '@tanstack/react-router' {
       path: '/futures'
       fullPath: '/futures'
       preLoaderRoute: typeof FuturesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forex': {
-      id: '/forex'
-      path: '/forex'
-      fullPath: '/forex'
-      preLoaderRoute: typeof ForexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/etf': {
@@ -240,7 +220,6 @@ const rootRouteChildren: RootRouteChildren = {
   CryptoRoute: CryptoRoute,
   CustomRoute: CustomRoute,
   EtfRoute: EtfRoute,
-  ForexRoute: ForexRoute,
   FuturesRoute: FuturesRoute,
   ProductsRoute: ProductsRoute,
   SettingsRoute: SettingsRoute,

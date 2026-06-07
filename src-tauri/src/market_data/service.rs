@@ -498,7 +498,6 @@ fn asset_supports_provider(asset: &str, provider: &str) -> bool {
             | ("etf", "alpha-vantage")
             | ("etf", "finnhub")
             | ("crypto", "alpha-vantage")
-            | ("forex", "alpha-vantage")
             | ("futures", "alpha-vantage")
     )
 }
@@ -643,15 +642,6 @@ fn fetch_asset_snapshot(
                 })?;
                 fetch_alpha_global_quote(client, symbol, asset, definition.currency)
             }
-            AssetFetchKind::FxDaily => {
-                let base = definition
-                    .alpha_base
-                    .ok_or_else(|| format!("Missing Alpha base mapping for {}", definition.code))?;
-                let quote = definition.alpha_quote.ok_or_else(|| {
-                    format!("Missing Alpha quote mapping for {}", definition.code)
-                })?;
-                fetch_alpha_fx_daily(client, base, quote)
-            }
             AssetFetchKind::DigitalDaily => {
                 let symbol = definition.alpha_symbol.ok_or_else(|| {
                     format!("Missing Alpha symbol mapping for {}", definition.code)
@@ -678,8 +668,7 @@ fn fetch_asset_snapshot(
 fn snapshot_ttl(provider: &str, fetch_kind: AssetFetchKind) -> Duration {
     match (provider, fetch_kind) {
         ("alpha-vantage", AssetFetchKind::Quote) => Duration::from_secs(60 * 15),
-        ("alpha-vantage", AssetFetchKind::FxDaily)
-        | ("alpha-vantage", AssetFetchKind::DigitalDaily) => Duration::from_secs(60 * 30),
+        ("alpha-vantage", AssetFetchKind::DigitalDaily) => Duration::from_secs(60 * 30),
         ("alpha-vantage", AssetFetchKind::CommoditySeries) => Duration::from_secs(60 * 60),
         ("finnhub", _) => Duration::from_secs(60 * 5),
         _ => Duration::from_secs(60 * 10),
@@ -901,57 +890,6 @@ fn fetch_alpha_global_quote(
     })
 }
 
-fn fetch_alpha_fx_daily(
-    client: &reqwest::blocking::Client,
-    from_symbol: &str,
-    to_symbol: &str,
-) -> Result<MarketSnapshot, String> {
-    let api_key = env_key(&["ALPHA_API_KEY"])?;
-    let url = format!(
-        "https://www.alphavantage.co/query?function=FX_DAILY&from_symbol={}&to_symbol={}&outputsize=compact&apikey={}",
-        urlencoding::encode(from_symbol),
-        urlencoding::encode(to_symbol),
-        urlencoding::encode(&api_key)
-    );
-
-    let subject = format!("{from_symbol}/{to_symbol}");
-    let payload = request_alpha_json(client, url, "fx_daily", &subject)?;
-    let series = payload
-        .get("Time Series FX (Daily)")
-        .and_then(Value::as_object)
-        .ok_or_else(|| format!("Alpha Vantage FX_DAILY payload missing for {subject}"))?;
-    let (latest_date, latest_entry, previous_entry) = first_two_series_entries(series, &subject)?;
-
-    let latest_close = parse_object_metric(latest_entry, "4. close")
-        .ok_or_else(|| format!("Alpha Vantage FX_DAILY latest close missing for {subject}"))?;
-    let previous_close = parse_object_metric(previous_entry, "4. close");
-    let change = previous_close.map(|value| latest_close - value);
-    let change_percent = previous_close.and_then(|value| {
-        if value.abs() < f64::EPSILON {
-            None
-        } else {
-            Some((latest_close - value) / value * 100.0)
-        }
-    });
-
-    Ok(MarketSnapshot {
-        provider: "alpha-vantage".to_string(),
-        symbol: subject,
-        asset_class: "forex".to_string(),
-        price: Some(latest_close),
-        change,
-        change_percent,
-        open: parse_object_metric(latest_entry, "1. open"),
-        high: parse_object_metric(latest_entry, "2. high"),
-        low: parse_object_metric(latest_entry, "3. low"),
-        previous_close,
-        volume: None,
-        currency: Some(to_symbol.to_string()),
-        as_of: Some(latest_date.to_string()),
-        source_note: "Alpha Vantage FX_DAILY".to_string(),
-    })
-}
-
 fn fetch_alpha_digital_daily(
     client: &reqwest::blocking::Client,
     symbol: &str,
@@ -1118,10 +1056,6 @@ fn parse_percent_f64(value: Option<&Value>) -> Option<f64> {
             .as_str()
             .and_then(|value| value.trim().trim_end_matches('%').parse::<f64>().ok())
     })
-}
-
-fn parse_object_metric(entry: &Map<String, Value>, key: &str) -> Option<f64> {
-    parse_string_f64(entry.get(key))
 }
 
 fn parse_digital_metric(entry: &Map<String, Value>, metric: &str, market: &str) -> Option<f64> {

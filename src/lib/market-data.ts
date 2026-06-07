@@ -436,7 +436,7 @@ function buildPreviewIndicesOverview(category: IndicesCategory): IndicesOverview
   }
 }
 
-export type MarketAsset = "stocks" | "etf" | "crypto" | "forex" | "futures"
+export type MarketAsset = "stocks" | "etf" | "crypto" | "futures"
 
 export interface AssetCategoryCount {
   id: string
@@ -488,7 +488,6 @@ export const marketNavigationItems = [
   { to: "/" as const, i18nKey: "assetIndex" },
   { to: "/stocks" as const, i18nKey: "assetStock" },
   { to: "/crypto" as const, i18nKey: "assetCrypto" },
-  { to: "/forex" as const, i18nKey: "assetForex" },
   { to: "/futures" as const, i18nKey: "assetFuture" },
   { to: "/etf" as const, i18nKey: "assetEtf" },
 ]
@@ -531,19 +530,6 @@ export const marketAssetConfigs: Record<MarketAsset, MarketAssetConfig> = {
       { id: "smart-contracts", i18nKey: "cryptoSectionSmartContracts" },
       { id: "payments-meme", i18nKey: "cryptoSectionPaymentsMeme" },
       { id: "infrastructure", i18nKey: "cryptoSectionInfrastructure" },
-    ],
-  },
-  forex: {
-    asset: "forex",
-    path: "/forex",
-    navI18nKey: "assetForex",
-    titleI18nKey: "forexTitle",
-    descriptionI18nKey: "forexDescription",
-    categories: [
-      { id: "majors", i18nKey: "forexSectionMajors" },
-      { id: "dollar-bloc", i18nKey: "forexSectionDollarBloc" },
-      { id: "asia", i18nKey: "forexSectionAsia" },
-      { id: "crosses", i18nKey: "forexSectionCrosses" },
     ],
   },
   futures: {
@@ -865,104 +851,6 @@ const previewAssetSeeds: Record<MarketAsset, AssetPreviewSeed[]> = {
       currency: "USD",
     },
   ],
-  forex: [
-    {
-      id: "eurusd",
-      category_id: "majors",
-      symbol: "EUR/USD",
-      name: "Euro / US Dollar",
-      region: "Global",
-      currency: "USD",
-    },
-    {
-      id: "gbpusd",
-      category_id: "majors",
-      symbol: "GBP/USD",
-      name: "British Pound / US Dollar",
-      region: "Global",
-      currency: "USD",
-    },
-    {
-      id: "usdjpy",
-      category_id: "majors",
-      symbol: "USD/JPY",
-      name: "US Dollar / Japanese Yen",
-      region: "Japan",
-      currency: "JPY",
-    },
-    {
-      id: "audusd",
-      category_id: "dollar-bloc",
-      symbol: "AUD/USD",
-      name: "Australian Dollar / US Dollar",
-      region: "Australia",
-      currency: "USD",
-    },
-    {
-      id: "nzdusd",
-      category_id: "dollar-bloc",
-      symbol: "NZD/USD",
-      name: "New Zealand Dollar / US Dollar",
-      region: "New Zealand",
-      currency: "USD",
-    },
-    {
-      id: "usdcad",
-      category_id: "dollar-bloc",
-      symbol: "USD/CAD",
-      name: "US Dollar / Canadian Dollar",
-      region: "Canada",
-      currency: "CAD",
-    },
-    {
-      id: "usdcnh",
-      category_id: "asia",
-      symbol: "USD/CNH",
-      name: "US Dollar / Offshore Yuan",
-      region: "China",
-      currency: "CNH",
-    },
-    {
-      id: "usdhkd",
-      category_id: "asia",
-      symbol: "USD/HKD",
-      name: "US Dollar / Hong Kong Dollar",
-      region: "Hong Kong",
-      currency: "HKD",
-    },
-    {
-      id: "usdsgd",
-      category_id: "asia",
-      symbol: "USD/SGD",
-      name: "US Dollar / Singapore Dollar",
-      region: "Singapore",
-      currency: "SGD",
-    },
-    {
-      id: "eurgbp",
-      category_id: "crosses",
-      symbol: "EUR/GBP",
-      name: "Euro / British Pound",
-      region: "Europe",
-      currency: "GBP",
-    },
-    {
-      id: "eurjpy",
-      category_id: "crosses",
-      symbol: "EUR/JPY",
-      name: "Euro / Japanese Yen",
-      region: "Global",
-      currency: "JPY",
-    },
-    {
-      id: "gbpjpy",
-      category_id: "crosses",
-      symbol: "GBP/JPY",
-      name: "British Pound / Japanese Yen",
-      region: "Global",
-      currency: "JPY",
-    },
-  ],
   futures: [
     {
       id: "wti",
@@ -1091,13 +979,13 @@ function buildPreviewAssetRow(
     name: seed.name,
     region: seed.region,
     currency: seed.currency,
-    price: roundMetric(base, asset === "forex" ? 4 : asset === "crypto" ? 2 : 2),
-    change: roundMetric(change, asset === "forex" ? 4 : 2),
+    price: roundMetric(base, 2),
+    change: roundMetric(change, 2),
     change_percent: roundMetric(changePercent, 2),
-    open: roundMetric(open, asset === "forex" ? 4 : 2),
-    high: asset === "futures" ? null : roundMetric(high, asset === "forex" ? 4 : 2),
-    low: asset === "futures" ? null : roundMetric(low, asset === "forex" ? 4 : 2),
-    previous_close: roundMetric(previousClose, asset === "forex" ? 4 : 2),
+    open: roundMetric(open, 2),
+    high: asset === "futures" ? null : roundMetric(high, 2),
+    low: asset === "futures" ? null : roundMetric(low, 2),
+    previous_close: roundMetric(previousClose, 2),
     as_of: `2026-06-07 ${String(9 + (index % 8)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}:00`,
     technical_rating:
       changePercent >= 2
@@ -1120,8 +1008,6 @@ function previewBaseValue(asset: MarketAsset, hash: number) {
       return 35 + (hash % 250)
     case "crypto":
       return 0.6 + (hash % 700) * 0.9
-    case "forex":
-      return 0.6 + (hash % 90) / 20
     case "futures":
       return 20 + (hash % 130)
   }
