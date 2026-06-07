@@ -90,7 +90,10 @@ pub(crate) fn get_indices_overview(
     let source_note = if unavailable_count == 0 {
         "Finnhub aggregated quotes".to_string()
     } else {
-        format!("Finnhub aggregated quotes · {} symbol(s) unavailable", unavailable_count)
+        format!(
+            "Finnhub aggregated quotes · {} symbol(s) unavailable",
+            unavailable_count
+        )
     };
 
     let response = IndicesOverviewResponse {
@@ -292,7 +295,8 @@ fn resolve_indices_provider(preferred: Option<&str>) -> Result<&'static str, Str
                 Ok("finnhub")
             }
             "finnhub" => {
-                let message = "Finnhub API key is not configured for aggregated indices".to_string();
+                let message =
+                    "Finnhub API key is not configured for aggregated indices".to_string();
                 warn!(target: MARKET_LOG_TARGET, "{message}");
                 Err(message)
             }
