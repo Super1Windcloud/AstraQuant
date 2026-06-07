@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router"
 import { RefreshCw } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { MarketSidebar } from "@/components/markets/sidebar"
 import { MarketTableSkeletonBody } from "@/components/markets/table-skeleton"
@@ -47,6 +47,8 @@ interface OverviewCacheEntry {
   descriptionKey: string
 }
 
+const overviewCache = new Map<string, OverviewCacheEntry>()
+
 interface MarketOverviewPageProps {
   kind: OverviewKind
 }
@@ -77,7 +79,6 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
   )
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const overviewCacheRef = useRef(new Map<string, OverviewCacheEntry>())
 
   const cacheKey = `${kind}:${requestedProvider ?? "auto"}:${activeFilterId}:${reloadToken}`
 
@@ -85,7 +86,7 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
     let ignore = false
 
     async function load() {
-      const cached = overviewCacheRef.current.get(cacheKey)
+      const cached = overviewCache.get(cacheKey)
 
       if (cached) {
         setRows(cached.rows)
@@ -120,7 +121,7 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
             descriptionKey: overview.description_key,
           }
 
-          overviewCacheRef.current.set(cacheKey, nextEntry)
+          overviewCache.set(cacheKey, nextEntry)
           setRows(overview.rows)
           setCategories(overview.categories)
           setUpdatedAt(overview.updated_at)
@@ -150,7 +151,7 @@ export function MarketOverviewPage({ kind }: MarketOverviewPageProps) {
             descriptionKey: assetConfig?.descriptionI18nKey ?? "stocksDescription",
           }
 
-          overviewCacheRef.current.set(cacheKey, nextEntry)
+          overviewCache.set(cacheKey, nextEntry)
           setRows(overview.rows)
           setCategories(overview.categories)
           setUpdatedAt(overview.updated_at)
