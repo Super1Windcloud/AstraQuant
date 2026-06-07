@@ -39,8 +39,7 @@ export function MarketSidebar({ footer }: MarketSidebarProps) {
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden self-start overflow-hidden border-r border-border/60 bg-background/78 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 transition-[width] duration-150 ease-out lg:flex lg:flex-col",
-        "h-[calc(100vh-2.5rem)]",
+        "hidden h-full shrink-0 overflow-hidden border-r border-border/60 bg-background/78 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 transition-[width] duration-150 ease-out lg:flex lg:flex-col",
         isCollapsed ? "w-[72px]" : "w-[248px]"
       )}
     >

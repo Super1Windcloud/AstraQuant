@@ -1,4 +1,4 @@
-import { createRootRoute, Outlet } from "@tanstack/react-router"
+import { createRootRoute, Outlet, useLocation } from "@tanstack/react-router"
 import { invoke } from "@tauri-apps/api/core"
 import { useEffect } from "react"
 
@@ -11,7 +11,12 @@ import { I18nProvider, useI18n } from "@/lib/i18n"
 import { MarketProviderStore } from "@/lib/market-provider"
 import { cn } from "@/lib/utils"
 
+const marketRoutes = new Set(["/", "/stocks", "/crypto", "/futures", "/etf"])
+
 function AppShell() {
+  const { pathname } = useLocation()
+  const isMarketRoute = marketRoutes.has(pathname)
+
   useEffect(() => {
     invoke("show_window").catch((error) => {
       console.error("[AppShell] Failed to invoke show_window", error)
@@ -30,8 +35,10 @@ function AppShell() {
                   scrollbarWidth: "none",
                 }}
                 className={cn(
-                  "flex-1 overflow-auto bg-background pb-8",
-                  "scrollbar scrollbar-track-transparent scrollbar-thumb-accent scrollbar-thumb-rounded-md"
+                  "flex-1 bg-background",
+                  isMarketRoute
+                    ? "overflow-hidden"
+                    : "overflow-auto pb-8 scrollbar scrollbar-track-transparent scrollbar-thumb-accent scrollbar-thumb-rounded-md"
                 )}
               >
                 <Outlet />

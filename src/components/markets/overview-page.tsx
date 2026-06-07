@@ -127,12 +127,12 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
   }
 
   return (
-    <main className="flex min-h-full bg-background text-foreground">
+    <main className="flex h-full min-h-0 overflow-hidden bg-background text-foreground">
       <MarketSidebar footer={formatAggregateProvider(aggregateProvider, resolvedProvider, t)} />
 
-      <section className="min-w-0 flex-1 bg-background">
-        <div className="mx-auto flex w-full max-w-[1600px] flex-col px-5 pt-6 pb-8 sm:px-8">
-          <div className="flex flex-wrap gap-2">
+      <section className="min-w-0 flex-1 overflow-hidden bg-background">
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-col px-5 pt-6 pb-6 sm:px-8">
+          <div className="shrink-0 flex flex-wrap gap-2">
             {categories.map((category) => {
               const isActive = activeCategoryId === category.id
 
@@ -154,7 +154,7 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
             })}
           </div>
 
-          <div className="mt-7 max-w-[860px]">
+          <div className="mt-7 max-w-[860px] shrink-0">
             <h1 className="text-[22px] font-semibold tracking-normal text-foreground">
               {t(config.titleI18nKey as never)}
             </h1>
@@ -163,7 +163,7 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
             </p>
           </div>
 
-          <div className="mt-8 flex items-center justify-between gap-4 border-b border-border/60">
+          <div className="mt-8 flex shrink-0 items-center justify-between gap-4 border-b border-border/60">
             <Tabs value={selectedTab} onValueChange={setSelectedTab} className="gap-0">
               <TabsList variant="line" className="h-11 gap-5 p-0 text-muted-foreground">
                 {tabs.map((tab) => (
@@ -198,145 +198,159 @@ export function MarketOverviewPage({ asset }: MarketOverviewPageProps) {
           </div>
 
           {error ? (
-            <div className="mt-4 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div className="mt-4 shrink-0 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {t("marketsLoadFailed")}: {error}
             </div>
           ) : null}
 
-          {sections.map((section) => (
-            <section key={section.id} id={`market-section-${section.id}`} className="mt-8">
-              <div className="mb-3 flex items-end justify-between gap-4">
-                <div>
-                  <h2 className="text-[18px] font-semibold text-foreground">
-                    {t(section.label_key as never)}
-                  </h2>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {section.total} {t("indicesTableSymbol")}
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2 pr-1",
+              error ? "mt-4" : "mt-6"
+            )}
+          >
+            {sections.map((section, index) => (
+              <section
+                key={section.id}
+                id={`market-section-${section.id}`}
+                className={cn(index === 0 ? "" : "mt-8")}
+              >
+                <div className="mb-3 flex items-end justify-between gap-4">
+                  <div>
+                    <h2 className="text-[18px] font-semibold text-foreground">
+                      {t(section.label_key as never)}
+                    </h2>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {section.total} {t("indicesTableSymbol")}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="overflow-hidden rounded-xl border border-border/60 bg-background/72 backdrop-blur-xl supports-[backdrop-filter]:bg-background/58">
-                <Table className="min-w-[1180px]">
-                  <TableHeader>
-                    <TableRow className="border-border/60 hover:bg-transparent">
-                      <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
-                        <div className="pl-4">
-                          <div>{t("indicesTableSymbol")}</div>
-                          <div className="mt-1">{section.total}</div>
-                        </div>
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTablePrice")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableChangePct")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableChange")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableHigh")}
-                      </TableHead>
-                      <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableLow")}
-                      </TableHead>
-                      <TableHead className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
-                        {t("indicesTableTechRating")}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  {isInitialLoading ? (
-                    <MarketTableSkeletonBody rowCount={3} />
-                  ) : (
-                    <TableBody>
-                      {section.rows.length === 0 ? (
-                        <TableRow className="border-border/50 hover:bg-transparent">
-                          <TableCell
-                            colSpan={7}
-                            className="px-4 py-8 text-center text-sm text-muted-foreground"
-                          >
-                            {t("marketsNoData")}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        section.rows.map((row) => (
-                          <TableRow
-                            key={row.id}
-                            className="border-border/50 text-[14px] hover:bg-accent/25"
-                          >
-                            <TableCell className="px-0 py-0">
-                              <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
-                                <AssetBadge symbol={row.symbol} />
-                                <div className="min-w-0 py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="rounded bg-accent/50 px-2 py-1 text-[12px] leading-none text-foreground">
-                                      {row.symbol}
-                                    </span>
-                                    <span className="truncate text-foreground">{row.name}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-3 py-3 text-right text-foreground">
-                              {formatMarketValue(row.price, locale, 2)}
-                              {row.currency ? (
-                                <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-                                  {row.currency}
-                                </span>
-                              ) : null}
-                            </TableCell>
+                <div className="overflow-hidden rounded-xl border border-border/60 bg-background/72 backdrop-blur-xl supports-[backdrop-filter]:bg-background/58">
+                  <Table className="min-w-[1180px]">
+                    <TableHeader>
+                      <TableRow className="border-border/60 hover:bg-transparent">
+                        <TableHead className="h-auto px-0 py-3 text-xs font-medium text-muted-foreground">
+                          <div className="pl-4">
+                            <div>{t("indicesTableSymbol")}</div>
+                            <div className="mt-1">{section.total}</div>
+                          </div>
+                        </TableHead>
+                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                          {t("indicesTablePrice")}
+                        </TableHead>
+                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                          {t("indicesTableChangePct")}
+                        </TableHead>
+                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                          {t("indicesTableChange")}
+                        </TableHead>
+                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                          {t("indicesTableHigh")}
+                        </TableHead>
+                        <TableHead className="px-3 py-3 text-right text-xs font-medium text-muted-foreground">
+                          {t("indicesTableLow")}
+                        </TableHead>
+                        <TableHead className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
+                          {t("indicesTableTechRating")}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    {isInitialLoading ? (
+                      <MarketTableSkeletonBody rowCount={3} />
+                    ) : (
+                      <TableBody>
+                        {section.rows.length === 0 ? (
+                          <TableRow className="border-border/50 hover:bg-transparent">
                             <TableCell
-                              className={cn(
-                                "px-3 py-3 text-right",
-                                getSignedColorClass(row.change_percent)
-                              )}
+                              colSpan={7}
+                              className="px-4 py-8 text-center text-sm text-muted-foreground"
                             >
-                              {formatPercent(row.change_percent, locale)}
-                            </TableCell>
-                            <TableCell
-                              className={cn(
-                                "px-3 py-3 text-right",
-                                getSignedColorClass(row.change)
-                              )}
-                            >
-                              {formatSignedValue(row.change, locale, 2)}
-                              {row.currency ? (
-                                <span className="ml-1 text-[10px] uppercase opacity-80">
-                                  {row.currency}
-                                </span>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="px-3 py-3 text-right text-foreground">
-                              {formatMarketValue(row.high, locale, 2)}
-                            </TableCell>
-                            <TableCell className="px-3 py-3 text-right text-foreground">
-                              {formatMarketValue(row.low, locale, 2)}
-                            </TableCell>
-                            <TableCell className="px-4 py-3 text-right">
-                              <span
-                                className={cn("text-[14px]", getRatingClass(row.technical_rating))}
-                              >
-                                {row.technical_rating}
-                              </span>
+                              {t("marketsNoData")}
                             </TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  )}
-                </Table>
-              </div>
-            </section>
-          ))}
+                        ) : (
+                          section.rows.map((row) => (
+                            <TableRow
+                              key={row.id}
+                              className="border-border/50 text-[14px] hover:bg-accent/25"
+                            >
+                              <TableCell className="px-0 py-0">
+                                <div className="grid min-h-[44px] grid-cols-[44px_minmax(0,1fr)] items-center gap-0 pl-4">
+                                  <AssetBadge symbol={row.symbol} />
+                                  <div className="min-w-0 py-3">
+                                    <div className="flex items-center gap-3">
+                                      <span className="rounded bg-accent/50 px-2 py-1 text-[12px] leading-none text-foreground">
+                                        {row.symbol}
+                                      </span>
+                                      <span className="truncate text-foreground">{row.name}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="px-3 py-3 text-right text-foreground">
+                                {formatMarketValue(row.price, locale, 2)}
+                                {row.currency ? (
+                                  <span className="ml-1 text-[10px] uppercase text-muted-foreground">
+                                    {row.currency}
+                                  </span>
+                                ) : null}
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  "px-3 py-3 text-right",
+                                  getSignedColorClass(row.change_percent)
+                                )}
+                              >
+                                {formatPercent(row.change_percent, locale)}
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  "px-3 py-3 text-right",
+                                  getSignedColorClass(row.change)
+                                )}
+                              >
+                                {formatSignedValue(row.change, locale, 2)}
+                                {row.currency ? (
+                                  <span className="ml-1 text-[10px] uppercase opacity-80">
+                                    {row.currency}
+                                  </span>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="px-3 py-3 text-right text-foreground">
+                                {formatMarketValue(row.high, locale, 2)}
+                              </TableCell>
+                              <TableCell className="px-3 py-3 text-right text-foreground">
+                                {formatMarketValue(row.low, locale, 2)}
+                              </TableCell>
+                              <TableCell className="px-4 py-3 text-right">
+                                <span
+                                  className={cn(
+                                    "text-[14px]",
+                                    getRatingClass(row.technical_rating)
+                                  )}
+                                >
+                                  {row.technical_rating}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    )}
+                  </Table>
+                </div>
+              </section>
+            ))}
 
-          <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-            <div>
-              {rows.length} {t("indicesTableSymbol")}
-            </div>
-            <div className="text-right">
-              <div>{sourceNote || t("marketsPreviewSource")}</div>
-              {updatedAt ? <div className="mt-1">{updatedAt}</div> : null}
+            <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+              <div>
+                {rows.length} {t("indicesTableSymbol")}
+              </div>
+              <div className="text-right">
+                <div>{sourceNote || t("marketsPreviewSource")}</div>
+                {updatedAt ? <div className="mt-1">{updatedAt}</div> : null}
+              </div>
             </div>
           </div>
         </div>
