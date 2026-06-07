@@ -201,7 +201,6 @@ fn get_asset_overview_sync(
 
     let selected_asset = normalize_asset(&asset)?;
     let provider = resolve_asset_provider(&selected_asset, preferred_provider.as_deref())?;
-    let provider = maybe_fallback_asset_provider(&selected_asset, provider);
     let client = build_http_client()?;
     let definitions = definitions_for_asset(&selected_asset)
         .ok_or_else(|| format!("Unsupported asset overview request: {}", selected_asset))?;
@@ -284,19 +283,50 @@ fn get_market_item_detail_sync(
     let response = if selected_kind == "indices" {
         let definition = index_definition_by_id(&item_id)
             .ok_or_else(|| format!("Unknown index detail item id: {item_id}"))?;
-        resolve_indices_provider(preferred_provider.as_deref())?;
-        let snapshot = fetch_index_snapshot(&client, definition)?;
+        let requested_provider = preferred_provider
+            .as_deref()
+            .map(str::trim)
+            .filter(|provider| !provider.is_empty());
 
-        market_detail_from_index(definition, snapshot)
+        if requested_provider == Some("tradingview") {
+            let chart = fetch_tradingview_chart_series(
+                "indices",
+                definition.id,
+                definition.code,
+                index_tradingview_symbol(definition.id),
+            )?;
+
+            market_detail_from_index(definition, market_snapshot_from_chart_series(chart))
+        } else {
+            resolve_indices_provider(preferred_provider.as_deref())?;
+            let snapshot = fetch_index_snapshot(&client, definition)?;
+
+            market_detail_from_index(definition, snapshot)
+        }
     } else {
         let asset = normalize_asset(&selected_kind)?;
-        let provider = resolve_asset_provider(&asset, preferred_provider.as_deref())?;
-        let provider = maybe_fallback_asset_provider(&asset, provider);
         let definition = asset_definition_by_id(&asset, &item_id)
             .ok_or_else(|| format!("Unknown market detail item id: {item_id}"))?;
-        let snapshot = fetch_asset_snapshot(&client, provider, &asset, definition)?;
+        let requested_provider = preferred_provider
+            .as_deref()
+            .map(str::trim)
+            .filter(|provider| !provider.is_empty());
 
-        market_detail_from_asset(&asset, definition, snapshot)
+        if requested_provider == Some("tradingview") {
+            let chart = fetch_tradingview_chart_series(
+                &asset,
+                definition.id,
+                definition.code,
+                asset_tradingview_symbol(&asset, definition.id),
+            )?;
+
+            market_detail_from_asset(&asset, definition, market_snapshot_from_chart_series(chart))
+        } else {
+            let provider = resolve_asset_provider(&asset, preferred_provider.as_deref())?;
+            let snapshot = fetch_asset_snapshot(&client, provider, &asset, definition)?;
+
+            market_detail_from_asset(&asset, definition, snapshot)
+        }
     }?;
 
     info!(
@@ -373,7 +403,6 @@ fn get_market_chart_series_sync(
             )
         } else {
             let provider = resolve_asset_provider(&asset, preferred_provider.as_deref())?;
-            let provider = maybe_fallback_chart_provider(&asset, provider);
             fetch_asset_chart_series(&client, provider, &asset, definition)
         }
     }?;
@@ -389,6 +418,44 @@ fn get_market_chart_series_sync(
     );
 
     Ok(response)
+}
+
+fn market_snapshot_from_chart_series(chart: MarketChartSeriesResponse) -> MarketSnapshot {
+    let latest = chart.points.last();
+    let previous = if chart.points.len() >= 2 {
+        chart.points.get(chart.points.len() - 2)
+    } else {
+        None
+    };
+    let latest_close = latest.and_then(|point| point.close.or(point.value));
+    let previous_close = previous.and_then(|point| point.close.or(point.value));
+    let change = match (latest_close, previous_close) {
+        (Some(current), Some(previous_value)) => Some(current - previous_value),
+        _ => None,
+    };
+    let change_percent = match (latest_close, previous_close) {
+        (Some(current), Some(previous_value)) if previous_value.abs() >= f64::EPSILON => {
+            Some((current - previous_value) / previous_value * 100.0)
+        }
+        _ => None,
+    };
+
+    MarketSnapshot {
+        provider: chart.provider,
+        symbol: chart.symbol,
+        asset_class: chart.kind,
+        price: latest_close,
+        change,
+        change_percent,
+        open: latest.and_then(|point| point.open),
+        high: latest.and_then(|point| point.high),
+        low: latest.and_then(|point| point.low),
+        previous_close,
+        volume: None,
+        currency: chart.currency,
+        as_of: latest.map(|point| point.time.clone()),
+        source_note: chart.source_note,
+    }
 }
 
 fn fetch_tradingview_chart_series(
@@ -546,14 +613,6 @@ fn env_key(names: &[&str]) -> Result<String, String> {
     let message = format!("Missing API key. Expected one of: {}", names.join(", "));
     warn!(target: MARKET_LOG_TARGET, "{message}");
     Err(message)
-}
-
-fn has_configured_env_key(names: &[&str]) -> bool {
-    names.iter().any(|name| {
-        env::var(name)
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false)
-    })
 }
 
 fn read_json_response<T: serde::de::DeserializeOwned>(
@@ -756,17 +815,6 @@ fn fetch_asset_snapshot(
         return Ok(snapshot);
     }
 
-    if provider == "alpha-vantage" && alpha_daily_limit_reached() {
-        if let Some(snapshot) = try_finnhub_fallback(client, asset, definition)? {
-            store_cached_snapshot(cache_key, &snapshot);
-            return Ok(snapshot);
-        }
-
-        return Err(
-            "Alpha Vantage daily rate limit already reached for current app session.".to_string(),
-        );
-    }
-
     let snapshot = match provider {
         "finnhub" => {
             let symbol = definition
@@ -799,24 +847,11 @@ fn fetch_asset_snapshot(
         },
         _ => Err(format!("Unsupported market data provider: {provider}")),
     };
-
     let snapshot = match snapshot {
         Ok(snapshot) => snapshot,
         Err(error) if provider == "finnhub" && is_finnhub_rate_limit_message(&error) => {
             mark_finnhub_rate_limited(Duration::from_secs(60));
-
-            if let Some(snapshot) = try_alpha_snapshot_fallback(client, asset, definition)? {
-                snapshot
-            } else {
-                return Err(error);
-            }
-        }
-        Err(error) if provider == "alpha-vantage" && is_alpha_daily_limit_message(&error) => {
-            if let Some(snapshot) = try_finnhub_fallback(client, asset, definition)? {
-                snapshot
-            } else {
-                return Err(error);
-            }
+            return Err(error);
         }
         Err(error) => return Err(error),
     };
@@ -940,71 +975,14 @@ fn fetch_asset_chart_series(
         Ok(series) => Ok(series),
         Err(error) if provider == "finnhub" && is_finnhub_rate_limit_message(&error) => {
             mark_finnhub_rate_limited(Duration::from_secs(60));
-
-            if let Some(series) = try_alpha_chart_series_fallback(client, asset, definition)? {
-                Ok(series)
-            } else {
-                Err(error)
-            }
+            Err(error)
         }
         Err(error) if provider == "finnhub" && is_finnhub_candle_access_message(&error) => {
             mark_finnhub_candle_access_denied();
-
-            if let Some(series) = try_alpha_chart_series_fallback(client, asset, definition)? {
-                Ok(series)
-            } else {
-                Err(error)
-            }
-        }
-        Err(error) if provider == "alpha-vantage" && is_alpha_daily_limit_message(&error) => {
-            if let Some(series) = try_finnhub_chart_series_fallback(client, asset, definition)? {
-                Ok(series)
-            } else {
-                Err(error)
-            }
+            Err(error)
         }
         Err(error) => Err(error),
     }
-}
-
-fn try_finnhub_chart_series_fallback(
-    client: &reqwest::blocking::Client,
-    asset: &str,
-    definition: &AssetDefinition,
-) -> Result<Option<MarketChartSeriesResponse>, String> {
-    if !matches!(definition.fetch_kind, AssetFetchKind::Quote) {
-        return Ok(None);
-    }
-
-    if !has_configured_env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"]) {
-        return Ok(None);
-    }
-
-    let Some(symbol) = definition.finnhub_symbol else {
-        return Ok(None);
-    };
-
-    if !super::resolve::asset_supports_provider(asset, "finnhub") {
-        return Ok(None);
-    }
-
-    info!(
-        target: MARKET_LOG_TARGET,
-        "falling back to finnhub chart series after alpha-vantage limit asset={} symbol={}",
-        asset,
-        definition.code
-    );
-
-    fetch_finnhub_candle_series(
-        client,
-        asset,
-        definition.id,
-        definition.code,
-        symbol,
-        Some(definition.currency),
-        "Finnhub daily candles (fallback after Alpha Vantage limit)",
-    )
-    .map(Some)
 }
 
 fn fetch_finnhub_candle_series(
@@ -1605,209 +1583,6 @@ fn fetch_index_snapshot(
     fetch_finnhub(client, symbol, "index")
 }
 
-fn maybe_fallback_asset_provider<'a>(asset: &str, provider: &'a str) -> &'a str {
-    if provider == "alpha-vantage"
-        && alpha_daily_limit_reached()
-        && super::resolve::asset_supports_provider(asset, "finnhub")
-        && has_configured_env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"])
-    {
-        return "finnhub";
-    }
-
-    if provider == "finnhub"
-        && finnhub_rate_limit_active()
-        && super::resolve::asset_supports_provider(asset, "alpha-vantage")
-        && has_configured_env_key(&["ALPHA_API_KEY"])
-    {
-        return "alpha-vantage";
-    }
-
-    provider
-}
-
-fn maybe_fallback_chart_provider<'a>(asset: &str, provider: &'a str) -> &'a str {
-    let provider = maybe_fallback_asset_provider(asset, provider);
-
-    if provider == "finnhub"
-        && finnhub_candle_access_denied()
-        && super::resolve::asset_supports_provider(asset, "alpha-vantage")
-        && has_configured_env_key(&["ALPHA_API_KEY"])
-    {
-        return "alpha-vantage";
-    }
-
-    provider
-}
-
-fn try_finnhub_fallback(
-    client: &reqwest::blocking::Client,
-    asset: &str,
-    definition: &AssetDefinition,
-) -> Result<Option<MarketSnapshot>, String> {
-    if !has_configured_env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"]) {
-        return Ok(None);
-    }
-
-    let Some(symbol) = definition.finnhub_symbol else {
-        return Ok(None);
-    };
-
-    if !super::resolve::asset_supports_provider(asset, "finnhub") {
-        return Ok(None);
-    }
-
-    info!(
-        target: MARKET_LOG_TARGET,
-        "falling back to finnhub after alpha-vantage limit asset={} symbol={}",
-        asset,
-        definition.code
-    );
-
-    fetch_finnhub(client, symbol, asset).map(|mut snapshot| {
-        snapshot
-            .source_note
-            .push_str(" (fallback after Alpha Vantage limit)");
-        Some(snapshot)
-    })
-}
-
-fn try_alpha_snapshot_fallback(
-    client: &reqwest::blocking::Client,
-    asset: &str,
-    definition: &AssetDefinition,
-) -> Result<Option<MarketSnapshot>, String> {
-    if !super::resolve::asset_supports_provider(asset, "alpha-vantage")
-        || alpha_daily_limit_reached()
-        || !has_configured_env_key(&["ALPHA_API_KEY"])
-    {
-        return Ok(None);
-    }
-
-    info!(
-        target: MARKET_LOG_TARGET,
-        "falling back to alpha-vantage after finnhub rate limit asset={} symbol={}",
-        asset,
-        definition.code
-    );
-
-    let snapshot = match definition.fetch_kind {
-        AssetFetchKind::Quote => {
-            let Some(symbol) = definition.alpha_symbol else {
-                return Ok(None);
-            };
-
-            fetch_alpha_global_quote(client, symbol, asset, definition.currency)
-        }
-        AssetFetchKind::DigitalDaily => {
-            let (Some(symbol), Some(market)) = (definition.alpha_symbol, definition.alpha_market)
-            else {
-                return Ok(None);
-            };
-
-            fetch_alpha_digital_daily(client, symbol, market)
-        }
-        AssetFetchKind::CommoditySeries => {
-            let Some(function_name) = definition.alpha_function else {
-                return Ok(None);
-            };
-
-            fetch_alpha_commodity_series(client, function_name)
-        }
-    };
-
-    match snapshot {
-        Ok(mut snapshot) => {
-            snapshot
-                .source_note
-                .push_str(" (fallback after Finnhub rate limit)");
-            Ok(Some(snapshot))
-        }
-        Err(error) if is_alpha_daily_limit_message(&error) => {
-            mark_alpha_daily_limit_reached();
-            Err(error)
-        }
-        Err(error) => Err(error),
-    }
-}
-
-fn try_alpha_chart_series_fallback(
-    client: &reqwest::blocking::Client,
-    asset: &str,
-    definition: &AssetDefinition,
-) -> Result<Option<MarketChartSeriesResponse>, String> {
-    if !super::resolve::asset_supports_provider(asset, "alpha-vantage")
-        || alpha_daily_limit_reached()
-        || !has_configured_env_key(&["ALPHA_API_KEY"])
-    {
-        return Ok(None);
-    }
-
-    info!(
-        target: MARKET_LOG_TARGET,
-        "falling back to alpha-vantage chart series after finnhub rate limit asset={} symbol={}",
-        asset,
-        definition.code
-    );
-
-    let series = match definition.fetch_kind {
-        AssetFetchKind::Quote => {
-            let Some(symbol) = definition.alpha_symbol else {
-                return Ok(None);
-            };
-
-            fetch_alpha_daily_chart_series(
-                client,
-                asset,
-                definition.id,
-                definition.code,
-                symbol,
-                definition.currency,
-            )
-        }
-        AssetFetchKind::DigitalDaily => {
-            let (Some(symbol), Some(market)) = (definition.alpha_symbol, definition.alpha_market)
-            else {
-                return Ok(None);
-            };
-
-            fetch_alpha_digital_chart_series(
-                client,
-                asset,
-                definition.id,
-                definition.code,
-                symbol,
-                market,
-            )
-        }
-        AssetFetchKind::CommoditySeries => {
-            let Some(function_name) = definition.alpha_function else {
-                return Ok(None);
-            };
-
-            fetch_alpha_commodity_chart_series(
-                client,
-                asset,
-                definition.id,
-                definition.code,
-                function_name,
-            )
-        }
-    };
-
-    match series {
-        Ok(mut series) => {
-            series
-                .source_note
-                .push_str(" (fallback after Finnhub rate limit)");
-            Ok(Some(series))
-        }
-        Err(error) if is_alpha_daily_limit_message(&error) => {
-            mark_alpha_daily_limit_reached();
-            Err(error)
-        }
-        Err(error) => Err(error),
-    }
-}
 
 fn technical_rating(change_percent: Option<f64>) -> String {
     match change_percent {

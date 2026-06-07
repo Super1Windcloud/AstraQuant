@@ -25,13 +25,6 @@ pub(crate) fn resolve_indices_provider(preferred: Option<&str>) -> Result<&'stat
                 );
                 Ok("finnhub")
             }
-            "alpha-vantage" if has_env_key(&["FINNHUB_API_KEY", "FINNHUB_TOKEN"]) => {
-                warn!(
-                    target: MARKET_LOG_TARGET,
-                    "preferred indices provider requested=alpha-vantage unsupported, falling back to finnhub"
-                );
-                Ok("finnhub")
-            }
             "finnhub" => {
                 let message =
                     "Finnhub API key is not configured for aggregated indices".to_string();
@@ -143,6 +136,7 @@ pub(crate) fn provider_label(provider: &str) -> &'static str {
     match provider {
         "alpha-vantage" => "Alpha Vantage",
         "finnhub" => "Finnhub",
+        "tradingview" => "TradingView",
         _ => "Unknown provider",
     }
 }
