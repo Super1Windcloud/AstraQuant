@@ -582,18 +582,19 @@ function formatAggregateProvider(
   resolvedProvider: MarketProvider | null,
   t: (key: string) => string
 ) {
+  const label = t("aggregateProvider")
   const selectedLabel = providerLabels[aggregateProvider as MarketProvider] ?? aggregateProvider
   const effectiveLabel = providerLabels[effectiveProvider as MarketProvider] ?? effectiveProvider
 
   if (!resolvedProvider) {
-    return `${t("marketsProvider")}: ${selectedLabel}`
+    return `${label}: ${selectedLabel}`
   }
 
   const resolvedLabel = providerLabels[resolvedProvider] ?? resolvedProvider
 
   if (aggregateProvider === effectiveProvider) {
-    return `${t("marketsProvider")}: ${resolvedLabel}`
+    return `${label}: ${resolvedLabel}`
   }
 
-  return `${t("marketsProvider")}: ${selectedLabel} -> ${effectiveLabel} -> ${resolvedLabel}`
+  return `${label}: ${selectedLabel} -> ${effectiveLabel} -> ${resolvedLabel}`
 }

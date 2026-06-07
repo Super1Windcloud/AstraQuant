@@ -105,6 +105,14 @@ pub(crate) fn resolve_asset_provider(
         };
     }
 
+    if matches!(asset, "crypto" | "futures") {
+        info!(
+            target: MARKET_LOG_TARGET,
+            "resolved asset provider automatically selected=tradingview asset={asset}"
+        );
+        return Ok("tradingview");
+    }
+
     if asset_supports_provider(asset, "alpha-vantage") && has_env_key(&["ALPHA_API_KEY"]) {
         info!(
             target: MARKET_LOG_TARGET,
